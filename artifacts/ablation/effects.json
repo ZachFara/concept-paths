@@ -1,7 +1,7 @@
 {
-  "delta_pair_strategy": "random",
+  "delta_pair_strategy": "cartesian",
   "model": "gpt2",
   "n_layers": 12,
-  "seed": 0,
-  "top_m": 5
+  "seed": 42,
+  "top_m": 50
 }
