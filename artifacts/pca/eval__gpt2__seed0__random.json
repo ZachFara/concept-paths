@@ -1,0 +1,10 @@
+{
+  "delta_pair_strategy": "random",
+  "hidden": 768,
+  "model": "gpt2",
+  "n_layers": 12,
+  "n_pairs": 40,
+  "pca_solver": "full",
+  "seed": 0,
+  "split": "eval"
+}

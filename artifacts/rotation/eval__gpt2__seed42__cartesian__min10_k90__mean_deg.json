@@ -1,0 +1,13 @@
+{
+  "delta_pair_strategy": "cartesian",
+  "hidden": 768,
+  "k_fixed": 5,
+  "k_mode": "min10_k90",
+  "model": "gpt2",
+  "n_layers": 12,
+  "n_pairs": 360,
+  "pca_solver": "full",
+  "rotation_metric": "mean_deg",
+  "seed": 42,
+  "split": "eval"
+}
