@@ -48,15 +48,27 @@ class ModelAdapter:
         """
         raise NotImplementedError
 
+    def _capture_batch_with_ablation(
+        self, input_ids: torch.Tensor, attention_mask: torch.Tensor, ablate_layer: int, neuron_idx: torch.Tensor
+    ) -> Tuple[List[torch.Tensor], List[torch.Tensor]]:
+        """
+        Optional override: run forward pass with neurons zeroed at ablate_layer.
+        """
+        raise NotImplementedError
+
     def capture(
-        self, prompts: List[str], batch_size: int = 8
+        self,
+        prompts: List[str],
+        batch_size: int = 8,
+        ablate_layer: int | None = None,
+        neuron_idx: Optional[np.ndarray] = None,
     ) -> CaptureResult:
         """
         Capture last-token residual and MLP activations for all layers.
+        ablate_layer/neuron_idx: if provided, zero those neurons at that layer during forward pass.
         """
         residual_chunks: List[np.ndarray] = []
         mlp_chunks: List[np.ndarray] = []
-        last_idx_chunks: List[int] = []
         for start in range(0, len(prompts), batch_size):
             batch_prompts = prompts[start : start + batch_size]
             enc = self.tokenizer(
@@ -66,8 +78,12 @@ class ModelAdapter:
             attn = enc.get("attention_mask", torch.ones_like(input_ids)).to(self.device)
             last_idx = attn.sum(dim=1) - 1
             with torch.no_grad():
-                res_layers, mlp_layers = self._capture_batch(input_ids, attn)
-            # Convert to numpy pooled last token per sample
+                if ablate_layer is not None and neuron_idx is not None:
+                    res_layers, mlp_layers = self._capture_batch_with_ablation(
+                        input_ids, attn, ablate_layer, torch.as_tensor(neuron_idx, device=self.device)
+                    )
+                else:
+                    res_layers, mlp_layers = self._capture_batch(input_ids, attn)
             res_stack = torch.stack(res_layers, dim=1)  # [B, L, S, H]
             mlp_stack = torch.stack(mlp_layers, dim=1)  # [B, L, S, d_mlp]
             bsz = input_ids.shape[0]
@@ -76,7 +92,6 @@ class ModelAdapter:
             pooled_mlp = mlp_stack[arange, :, last_idx, :].detach().cpu().numpy()
             residual_chunks.append(pooled_res)
             mlp_chunks.append(pooled_mlp)
-            last_idx_chunks.extend(last_idx.tolist())
         if residual_chunks:
             residual = np.concatenate(residual_chunks, axis=0)
             mlp = np.concatenate(mlp_chunks, axis=0)

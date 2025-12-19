@@ -4,7 +4,9 @@ import argparse
 from pathlib import Path
 
 from .config import ControlSpec, DataSpec, ExperimentConfig, load_experiment_config
-from .capture import capture_activations
+from .data import generate_samples
+from .capture import capture_activations, _select_adapter
+from .ablation import run_ablation_pipeline
 from .geometry_runner import run_controls, run_geometry
 from .utils import ensure_dir
 
@@ -28,6 +30,21 @@ def parse_args() -> argparse.Namespace:
     cap.add_argument("--control_templates", action="store_true")
     cap.add_argument("--artifacts_dir", type=str, default="artifacts")
     cap.add_argument("--local_files_only", type=int, default=1)
+
+    abl = sub.add_parser("ablate", help="Run ablation dose-response")
+    abl.add_argument("--config", type=str, default=None)
+    abl.add_argument("--concept", type=str, default="sentiment")
+    abl.add_argument("--split", type=str, default="eval", choices=["discovery", "eval"])
+    abl.add_argument("--template_family", type=str, default="main")
+    abl.add_argument("--seed", type=int, default=0)
+    abl.add_argument("--model", type=str, default="distilgpt2")
+    abl.add_argument("--adapter", type=str, default="gpt2")
+    abl.add_argument("--batch_size", type=int, default=4)
+    abl.add_argument("--layer", type=int, default=0)
+    abl.add_argument("--methods", type=str, default="variance,mean_abs,probe,corr")
+    abl.add_argument("--m_list", type=str, default="5,10,20,40,80")
+    abl.add_argument("--artifacts_dir", type=str, default="artifacts")
+    abl.add_argument("--use_cache", type=int, default=1)
 
     geo = sub.add_parser("geometry", help="Compute geometry metrics from cached activations (or capture if missing)")
     geo.add_argument("--config", type=str, default=None)
@@ -138,6 +155,46 @@ def cmd_controls(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_ablate(args: argparse.Namespace) -> None:
+    cfg: ExperimentConfig = load_experiment_config(Path(args.config) if args.config else None)
+    data_spec = DataSpec(
+        concept=args.concept,
+        split=args.split,  # type: ignore[arg-type]
+        template_family=args.template_family,
+        seed=args.seed,
+        n_levels=cfg.data.n_levels,
+        n_per_level=cfg.data.n_per_level,
+    )
+    control_spec = ControlSpec()
+    samples, ds_sig = generate_samples(cfg, data_spec=data_spec, control=control_spec)
+    capture = capture_activations(
+        config=cfg,
+        data_spec=data_spec,
+        control_spec=control_spec,
+        adapter_name=args.adapter,
+        model_name=args.model,
+        batch_size=args.batch_size,
+        artifacts_dir=Path(args.artifacts_dir),
+        use_cache=bool(args.use_cache),
+        local_files_only=True,
+    )
+    adapter = _select_adapter(args.adapter, args.model, local_files_only=True)
+    methods = [m.strip() for m in args.methods.split(",") if m.strip()]
+    m_list = [int(x) for x in args.m_list.split(",") if x.strip()]
+    out_dir = Path(args.artifacts_dir) / "ablation" / f"{args.concept}__{args.split}"
+    run_ablation_pipeline(
+        adapter=adapter,
+        samples=samples,
+        mlp=capture.mlp,
+        residual=capture.residual,
+        layer=args.layer,
+        m_list=m_list,
+        methods=methods,
+        seed=args.seed,
+        out_dir=out_dir,
+    )
+
+
 def main() -> None:
     args = parse_args()
     if args.cmd == "capture":
@@ -146,6 +203,8 @@ def main() -> None:
         cmd_geometry(args)
     elif args.cmd == "controls":
         cmd_controls(args)
+    elif args.cmd == "ablate":
+        cmd_ablate(args)
 
 
 if __name__ == "__main__":
