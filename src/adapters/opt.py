@@ -30,14 +30,14 @@ class OPTAdapter(ModelAdapter):
         hooks = []
 
         def resid_hook(_, __, output):
-            # OPT decoder layer returns tuple (hidden_states,)
-            if isinstance(output, tuple):
-                resid_saves.append(output[0].detach())
-            else:
-                resid_saves.append(output.detach())
+            out = output[0] if isinstance(output, tuple) else output
+            save_out = out if out.ndim == 3 else out.unsqueeze(1)
+            resid_saves.append(save_out.detach())
 
         def mlp_hook(_, __, output):
-            mlp_saves.append(output.detach())
+            out = output[0] if isinstance(output, tuple) else output
+            save_out = out if out.ndim == 3 else out.unsqueeze(1)
+            mlp_saves.append(save_out.detach())
 
         for block in layers:
             hooks.append(block.register_forward_hook(resid_hook))
@@ -62,18 +62,21 @@ class OPTAdapter(ModelAdapter):
         hooks = []
 
         def resid_hook(_, __, output):
-            if isinstance(output, tuple):
-                resid_saves.append(output[0].detach())
-            else:
-                resid_saves.append(output.detach())
+            out = output[0] if isinstance(output, tuple) else output
+            save_out = out if out.ndim == 3 else out.unsqueeze(1)
+            resid_saves.append(save_out.detach())
 
         def mlp_hook(layer_idx: int):
             def _hook(_, __, output):
                 out = output[0] if isinstance(output, tuple) else output
                 if layer_idx == ablate_layer:
-                    out[:, :, neuron_idx] = 0
-                mlp_saves.append(out.detach())
-                return out
+                    out_mod = out.clone()
+                    out_mod[..., neuron_idx] = 0
+                else:
+                    out_mod = out
+                save_out = out_mod if out_mod.ndim == 3 else out_mod.unsqueeze(1)
+                mlp_saves.append(save_out.detach())
+                return out_mod
 
             return _hook
 

@@ -1,11 +1,11 @@
 {
   "concept": "sentiment",
   "device": "mps",
-  "git_commit": "5d3aa64de9ebb31b6aec215de99764227f3efea6",
+  "git_commit": "213ba1b140b7e1f5ce92846df8080fb23780e72d",
   "layer": 0,
   "m": 10,
   "platform": "macOS-15.6-arm64-arm-64bit",
   "python": "3.11.4 (main, Jul  5 2023, 08:40:20) [Clang 14.0.6 ]",
   "task": "behavior_ablation",
-  "timestamp": "2025-12-19T17:13:17.177814Z"
+  "timestamp": "2025-12-19T19:09:26.803216Z"
 }

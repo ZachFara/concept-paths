@@ -1,15 +1,15 @@
 {
   "dataset_signature": "40e30a63848d529074b1eb14a3d06d1b90de531e15ca878d0b60e66ef84cefb8",
-  "k90_expansion": 3.333333333333332,
+  "k90_expansion": 2.3333333333333357,
   "metadata": {
-    "adapter": "gpt2",
+    "adapter": "opt",
     "concept": "concreteness",
     "dataset_signature": "40e30a63848d529074b1eb14a3d06d1b90de531e15ca878d0b60e66ef84cefb8",
-    "model_name": "gpt2",
+    "model_name": "facebook/opt-125m",
     "seed": 0,
     "split": "discovery",
     "split_signature": "a94d4106ac4d8f3027e2cb4a1dbea9d269b71af40cf233567ee2cb493736ca99",
     "template_family": "main"
   },
-  "rotation_decay": 19.700572967529297
+  "rotation_decay": 6.230533599853516
 }
