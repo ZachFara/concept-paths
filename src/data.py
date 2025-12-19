@@ -1,43 +1,35 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Literal
+from dataclasses import dataclass, field
+from typing import Dict, List, Literal, Optional, Tuple
 
 import numpy as np
 
-from .config import (
-    SENTIMENT_LEVELS,
-    SYNONYMS_DISCOVERY,
-    SYNONYMS_EVAL,
-    TEMPLATES_DISCOVERY,
-    TEMPLATES_EVAL,
-)
-
+from .config import ConceptSpec, ControlSpec, DataSpec, ExperimentConfig
+from .utils import hash_samples, stable_hash_json
 
 Split = Literal["discovery", "eval"]
 
 
 @dataclass(frozen=True)
 class Sample:
-    split: Split
+    sample_id: str
+    concept_name: str
+    level: int
+    level_label: str
     template_id: int
-    template: str
-    level_id: int
-    level: str
-    word: str
-
-    @property
-    def prompt(self) -> str:
-        return self.template.format(w=self.word)
-
-    @property
-    def key(self) -> str:
-        # Unique within a split due to disjoint templates/synonyms across splits.
-        return f"{self.template_id}|{self.level_id}|{self.word}"
+    template_text: str
+    synonym: str
+    prompt_text: str
+    metadata: Dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class DeltaPair:
+    """
+    Stub for compatibility with downstream modules; not used in Stage 1.
+    """
+
     split: Split
     template_id: int
     neg_level_id: int
@@ -48,96 +40,134 @@ class DeltaPair:
     pos_key: str
 
 
-def get_templates(split: Split) -> list[str]:
-    return TEMPLATES_DISCOVERY if split == "discovery" else TEMPLATES_EVAL
+def _assert_disjoint(a: List[str], b: List[str], label: str) -> None:
+    overlap = set(a).intersection(set(b))
+    if overlap:
+        raise ValueError(f"Leakage detected: {label} overlap: {sorted(overlap)[:5]}")
 
 
-def get_synonyms(split: Split) -> dict[str, list[str]]:
-    return SYNONYMS_DISCOVERY if split == "discovery" else SYNONYMS_EVAL
+def _pick_synonyms(synonyms: Dict[str, List[str]], n_per_level: int, rng: np.random.Generator) -> Dict[str, List[str]]:
+    picked: Dict[str, List[str]] = {}
+    for lvl, words in synonyms.items():
+        if not words:
+            picked[lvl] = []
+            continue
+        words_shuffled = list(words)
+        rng.shuffle(words_shuffled)
+        picked[lvl] = words_shuffled[: min(n_per_level, len(words_shuffled))]
+    return picked
 
 
-def generate_samples(split: Split) -> list[Sample]:
-    templates = get_templates(split)
-    synonyms = get_synonyms(split)
+def _shuffle_labels_preserve_counts(levels: List[int], rng: np.random.Generator) -> List[int]:
+    arr = np.array(levels, dtype=np.int64)
+    rng.shuffle(arr)
+    return arr.tolist()
 
-    samples: list[Sample] = []
-    for template_id, template in enumerate(templates):
-        for level_id, level in enumerate(SENTIMENT_LEVELS):
-            for word in synonyms[level]:
+
+def _assign_unrelated_labels(levels: List[int], n_levels: int, rng: np.random.Generator) -> List[int]:
+    counts = np.bincount(levels, minlength=n_levels)
+    expanded: List[int] = []
+    for lvl, c in enumerate(counts):
+        expanded.extend([lvl] * int(c))
+    rng.shuffle(expanded)
+    return expanded
+
+
+def _select_templates(spec: ConceptSpec, split: Split, family: str) -> List[str]:
+    if family not in spec.template_families:
+        raise ValueError(f"Template family '{family}' not found for concept {spec.name}")
+    templates = spec.template_families[family].get(split)
+    if templates is None:
+        raise ValueError(f"Split '{split}' missing templates for family '{family}' in concept {spec.name}")
+    return list(templates)
+
+
+def _build_sample_id(concept: str, split: Split, template_id: int, level: int, idx: int) -> str:
+    return f"{concept}-{split}-t{template_id}-l{level}-i{idx}"
+
+
+def generate_samples(
+    config: ExperimentConfig,
+    data_spec: Optional[DataSpec] = None,
+    control: Optional[ControlSpec] = None,
+) -> Tuple[List[Sample], str]:
+    """
+    Generate samples for a concept with optional controls.
+    Returns (samples, dataset_signature).
+    """
+    data_spec = data_spec or config.data
+    control = control or config.control
+    rng = np.random.default_rng(data_spec.seed)
+
+    if data_spec.concept not in config.concepts:
+        raise ValueError(f"Unknown concept: {data_spec.concept}")
+    concept_spec = config.concepts[data_spec.concept]
+    levels = concept_spec.levels[: data_spec.n_levels]
+
+    # disjoint synonym guard
+    for lvl in levels:
+        _assert_disjoint(
+            concept_spec.discovery_synonyms.get(lvl, []),
+            concept_spec.eval_synonyms.get(lvl, []),
+            f"synonyms level {lvl}",
+        )
+
+    split: Split = data_spec.split
+    base_family = data_spec.template_family
+    family = "control" if control.control_templates else base_family
+    templates = _select_templates(concept_spec, split, family)
+    # template disjointness guard
+    other_split = "eval" if split == "discovery" else "discovery"
+    other_templates = _select_templates(concept_spec, other_split, family)
+    _assert_disjoint(list(templates), list(other_templates), f"templates_{family}")
+
+    syn_source = (
+        concept_spec.discovery_synonyms if split == "discovery" else concept_spec.eval_synonyms
+    )
+    syn_selected = _pick_synonyms(syn_source, data_spec.n_per_level, rng)
+
+    samples: List[Sample] = []
+    for template_id, template_text in enumerate(templates):
+        for level_idx, level_label in enumerate(levels):
+            words = syn_selected.get(level_label, [])
+            for i, synonym in enumerate(words):
+                prompt_text = template_text.format(w=synonym)
+                sample_id = _build_sample_id(concept_spec.name, split, template_id, level_idx, i)
                 samples.append(
                     Sample(
-                        split=split,
+                        sample_id=sample_id,
+                        concept_name=concept_spec.name,
+                        level=level_idx,
+                        level_label=level_label,
                         template_id=template_id,
-                        template=template,
-                        level_id=level_id,
-                        level=level,
-                        word=word,
+                        template_text=template_text,
+                        synonym=synonym,
+                        prompt_text=prompt_text,
+                        metadata={
+                            "split": split,
+                            "template_family": family,
+                            "original_level": level_idx,
+                            "control_random": control.random_labels,
+                            "control_unrelated": control.unrelated_labels,
+                            "control_templates": control.control_templates,
+                        },
                     )
                 )
-    return samples
 
+    if control.random_labels and not control.unrelated_labels:
+        shuffled = _shuffle_labels_preserve_counts([s.level for s in samples], rng)
+        for s, new_level in zip(samples, shuffled, strict=True):
+            s.metadata["original_level"] = s.level
+            object.__setattr__(s, "level", int(new_level))
+            object.__setattr__(s, "level_label", levels[int(new_level)])
+    if control.unrelated_labels:
+        unrelated = _assign_unrelated_labels([s.level for s in samples], len(levels), rng)
+        for s, new_level in zip(samples, unrelated, strict=True):
+            s.metadata["original_level"] = s.level
+            object.__setattr__(s, "level", int(new_level))
+            object.__setattr__(s, "level_label", levels[int(new_level)])
 
-def index_samples(samples: list[Sample]) -> dict[str, int]:
-    return {s.key: i for i, s in enumerate(samples)}
-
-
-def build_delta_pairs(
-    samples: list[Sample],
-    *,
-    strategy: Literal["cartesian", "random"] = "cartesian",
-    seed: int = 0,
-) -> list[DeltaPair]:
-    """
-    Build "small step" adjacent sentiment Δ pairs:
-    (level i -> level i+1), same template, optionally varying synonyms.
-
-    strategy:
-      - "cartesian": all synonym combinations for each adjacent edge
-      - "random": one sampled synonym pair per edge (deterministic via seed)
-    """
-    if not samples:
-        return []
-
-    split: Split = samples[0].split
-    templates = get_templates(split)
-    synonyms = get_synonyms(split)
-    sample_index = index_samples(samples)
-
-    rng = np.random.default_rng(seed)
-    pairs: list[DeltaPair] = []
-
-    for template_id, _template in enumerate(templates):
-        for neg_level_id in range(len(SENTIMENT_LEVELS) - 1):
-            pos_level_id = neg_level_id + 1
-            neg_level = SENTIMENT_LEVELS[neg_level_id]
-            pos_level = SENTIMENT_LEVELS[pos_level_id]
-
-            neg_words = synonyms[neg_level]
-            pos_words = synonyms[pos_level]
-
-            if strategy == "random":
-                neg_words = [neg_words[int(rng.integers(0, len(neg_words)))]]
-                pos_words = [pos_words[int(rng.integers(0, len(pos_words)))]]
-
-            for neg_word in neg_words:
-                for pos_word in pos_words:
-                    neg_key = f"{template_id}|{neg_level_id}|{neg_word}"
-                    pos_key = f"{template_id}|{pos_level_id}|{pos_word}"
-                    # Because samples are a full Cartesian product, these should always exist.
-                    if neg_key not in sample_index or pos_key not in sample_index:
-                        continue
-                    pairs.append(
-                        DeltaPair(
-                            split=split,
-                            template_id=template_id,
-                            neg_level_id=neg_level_id,
-                            pos_level_id=pos_level_id,
-                            neg_word=neg_word,
-                            pos_word=pos_word,
-                            neg_key=neg_key,
-                            pos_key=pos_key,
-                        )
-                    )
-
-    return pairs
-
+    dataset_signature = hash_samples(samples)
+    for s in samples:
+        s.metadata["dataset_signature"] = dataset_signature
+    return samples, dataset_signature
