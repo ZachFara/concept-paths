@@ -108,3 +108,55 @@ def plot_null_histogram(
     if raw_out:
         ensure_dir(raw_out.parent)
         np.savez_compressed(raw_out, null=null_values, real=np.array([real_value]))
+
+
+def plot_heatmap(
+    *,
+    matrix: np.ndarray,
+    x_labels: Optional[List[str]],
+    y_labels: Optional[List[str]],
+    title: str,
+    outpath: Path,
+    raw_out: Optional[Path] = None,
+    vmin: Optional[float] = None,
+    vmax: Optional[float] = None,
+) -> None:
+    _setup_matplotlib()
+    ensure_dir(outpath.parent)
+    plt.figure(figsize=(6, 5))
+    plt.imshow(matrix, aspect="auto", cmap="viridis", vmin=vmin, vmax=vmax)
+    if x_labels:
+        plt.xticks(range(len(x_labels)), x_labels, rotation=45, ha="right")
+    if y_labels:
+        plt.yticks(range(len(y_labels)), y_labels)
+    plt.colorbar()
+    plt.title(title)
+    plt.tight_layout()
+    plt.savefig(outpath)
+    plt.close()
+    if raw_out:
+        np.savez_compressed(raw_out, matrix=matrix)
+
+
+def plot_bar(
+    *,
+    labels: List[str],
+    values: List[float],
+    title: str,
+    ylabel: str,
+    outpath: Path,
+    raw_out: Optional[Path] = None,
+) -> None:
+    _setup_matplotlib()
+    ensure_dir(outpath.parent)
+    plt.figure(figsize=(6, 4))
+    x = np.arange(len(labels))
+    plt.bar(x, values)
+    plt.xticks(x, labels, rotation=30, ha="right")
+    plt.ylabel(ylabel)
+    plt.title(title)
+    plt.tight_layout()
+    plt.savefig(outpath)
+    plt.close()
+    if raw_out:
+        np.savez_compressed(raw_out, labels=np.array(labels), values=np.array(values))

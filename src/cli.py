@@ -7,6 +7,8 @@ from .config import ControlSpec, DataSpec, ExperimentConfig, load_experiment_con
 from .data import generate_samples
 from .capture import capture_activations, _select_adapter
 from .ablation import run_ablation_pipeline
+from .specificity import run_specificity
+from .behavior import run_behavior, ablation_impact_on_behavior
 from .geometry_runner import run_controls, run_geometry
 from .utils import ensure_dir
 
@@ -46,6 +48,25 @@ def parse_args() -> argparse.Namespace:
     abl.add_argument("--artifacts_dir", type=str, default="artifacts")
     abl.add_argument("--use_cache", type=int, default=1)
 
+    spec = sub.add_parser("specificity", help="Direction similarity and transfer")
+    spec.add_argument("--config", type=str, default=None)
+    spec.add_argument("--concepts", type=str, default="sentiment,concreteness")
+    spec.add_argument("--split", type=str, default="discovery", choices=["discovery", "eval"])
+    spec.add_argument("--adapter", type=str, default="gpt2")
+    spec.add_argument("--model", type=str, default="distilgpt2")
+    spec.add_argument("--use_cache", type=int, default=1)
+    spec.add_argument("--artifacts_dir", type=str, default="artifacts")
+
+    beh = sub.add_parser("behavior", help="Behavioral probe and ablation impact")
+    beh.add_argument("--config", type=str, default=None)
+    beh.add_argument("--concept", type=str, default="sentiment")
+    beh.add_argument("--adapter", type=str, default="gpt2")
+    beh.add_argument("--model", type=str, default="distilgpt2")
+    beh.add_argument("--layer", type=int, default=0)
+    beh.add_argument("--m", type=int, default=20)
+    beh.add_argument("--selection_method", type=str, default="variance")
+    beh.add_argument("--use_cache", type=int, default=1)
+    beh.add_argument("--artifacts_dir", type=str, default="artifacts")
     geo = sub.add_parser("geometry", help="Compute geometry metrics from cached activations (or capture if missing)")
     geo.add_argument("--config", type=str, default=None)
     geo.add_argument("--concept", type=str, default="sentiment")
@@ -195,6 +216,43 @@ def cmd_ablate(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_specificity(args: argparse.Namespace) -> None:
+    cfg: ExperimentConfig = load_experiment_config(Path(args.config) if args.config else None)
+    concepts = [c.strip() for c in args.concepts.split(",") if c.strip()]
+    run_specificity(
+        cfg=cfg,
+        concepts=concepts,
+        split=args.split,  # type: ignore[arg-type]
+        adapter=args.adapter,
+        model=args.model,
+        artifacts_dir=Path(args.artifacts_dir),
+        use_cache=bool(args.use_cache),
+    )
+
+
+def cmd_behavior(args: argparse.Namespace) -> None:
+    cfg: ExperimentConfig = load_experiment_config(Path(args.config) if args.config else None)
+    run_behavior(
+        cfg=cfg,
+        concept=args.concept,
+        adapter=args.adapter,
+        model=args.model,
+        artifacts_dir=Path(args.artifacts_dir),
+        use_cache=bool(args.use_cache),
+    )
+    ablation_impact_on_behavior(
+        cfg=cfg,
+        concept=args.concept,
+        adapter_name=args.adapter,
+        model=args.model,
+        layer=args.layer,
+        m=args.m,
+        selection_method=args.selection_method,
+        artifacts_dir=Path(args.artifacts_dir),
+        use_cache=bool(args.use_cache),
+    )
+
+
 def main() -> None:
     args = parse_args()
     if args.cmd == "capture":
@@ -205,6 +263,10 @@ def main() -> None:
         cmd_controls(args)
     elif args.cmd == "ablate":
         cmd_ablate(args)
+    elif args.cmd == "specificity":
+        cmd_specificity(args)
+    elif args.cmd == "behavior":
+        cmd_behavior(args)
 
 
 if __name__ == "__main__":
