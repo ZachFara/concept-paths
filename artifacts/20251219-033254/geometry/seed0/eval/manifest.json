@@ -1,0 +1,7 @@
+{
+  "concept_mode": "sentiment",
+  "hidden": 768,
+  "n_layers": 12,
+  "n_pairs": 792,
+  "permute_labels": false
+}

@@ -1,0 +1,169 @@
+ablation:
+  selectors:
+  - lookahead
+  - local_corr
+  - local_ridge
+  top_m: 50
+artifacts_dir: artifacts
+batch_size: 8
+device: null
+geometry:
+  concept_mode: sentiment
+  delta_pair_strategy: cartesian
+  pair_subsample_frac: null
+  pc1_anchor: true
+  pca_solver: full
+  permute_labels: false
+  random_baseline_directions: 5
+  random_baseline_subspaces: 3
+  rotation_k_fixed: 5
+  rotation_k_mode: min10_k90
+  rotation_metric: mean_deg
+local_files_only: true
+model_name: gpt2
+plots_dir: plots
+run_id: null
+seeds:
+- 0
+- 1
+stimuli:
+  families:
+    adjective_clause:
+      discovery:
+      - Overall, the experience was {w}.
+      - In summary, the product feels {w}.
+      - To be honest, the service was {w}.
+      - All in all, the event was {w}.
+      - From my view, the meal was {w}.
+      eval:
+      - Overall, the trip was {w}.
+      - In summary, the movie was {w}.
+      - To be honest, the lecture was {w}.
+      - All in all, the app is {w}.
+      - From my view, the interaction felt {w}.
+    delayed_sentiment:
+      discovery:
+      - What stood out most was that it was {w}.
+      - To put it simply, it ended up {w}.
+      eval:
+      - After everything, it turned out {w}.
+      - In the end, the outcome was {w}.
+    negation:
+      discovery:
+      - It was not entirely {w}.
+      - "The mood wasn\u2019t exactly {w}."
+      eval:
+      - Overall it was nowhere near {w}.
+      - Frankly, it was anything but {w}.
+    verb_predicate:
+      discovery:
+      - The service felt {w}.
+      - The interface seems {w}.
+      eval:
+      - The presentation sounded {w}.
+      - The response was {w}.
+  sentiment_levels:
+  - very_negative
+  - negative
+  - somewhat_negative
+  - slightly_negative
+  - neutral
+  - slightly_positive
+  - somewhat_positive
+  - positive
+  - very_positive
+  synonyms_discovery:
+    negative:
+    - bad
+    - poor
+    - lousy
+    neutral:
+    - okay
+    - fine
+    - average
+    positive:
+    - great
+    - excellent
+    - wonderful
+    slightly_negative:
+    - disappointing
+    - underwhelming
+    - uneven
+    slightly_positive:
+    - decent
+    - pleasant
+    - nice
+    somewhat_negative:
+    - mediocre
+    - subpar
+    - lackluster
+    somewhat_positive:
+    - good
+    - solid
+    - satisfying
+    very_negative:
+    - horrible
+    - dreadful
+    - atrocious
+    very_positive:
+    - amazing
+    - fantastic
+    - outstanding
+  synonyms_eval:
+    negative:
+    - crummy
+    - inferior
+    - weak
+    neutral:
+    - fair
+    - standard
+    - typical
+    positive:
+    - brilliant
+    - superb
+    - delightful
+    slightly_negative:
+    - meh
+    - shaky
+    - imperfect
+    slightly_positive:
+    - agreeable
+    - likable
+    - friendly
+    somewhat_negative:
+    - so-so
+    - middling
+    - uninspired
+    somewhat_positive:
+    - worthwhile
+    - strong
+    - commendable
+    very_negative:
+    - terrible
+    - awful
+    - abysmal
+    very_positive:
+    - exceptional
+    - phenomenal
+    - spectacular
+  unordered_categories:
+    cat_a:
+    - alpha
+    - bravo
+    - charlie
+    cat_b:
+    - delta
+    - echo
+    - foxtrot
+    cat_c:
+    - golf
+    - hotel
+    - india
+    cat_d:
+    - juliet
+    - kilo
+    - lima
+    cat_e:
+    - mike
+    - november
+    - oscar

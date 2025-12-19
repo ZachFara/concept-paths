@@ -1,0 +1,21 @@
+model_name: gpt2
+local_files_only: true
+batch_size: 8
+seeds: [0, 1]
+artifacts_dir: artifacts
+plots_dir: plots
+geometry:
+  delta_pair_strategy: cartesian
+  pca_solver: full
+  rotation_k_mode: min10_k90
+  rotation_k_fixed: 5
+  rotation_metric: mean_deg
+  permute_labels: false
+  concept_mode: sentiment
+  pair_subsample_frac: null
+  random_baseline_directions: 5
+  random_baseline_subspaces: 3
+  pc1_anchor: true
+ablation:
+  top_m: 50
+  selectors: ["lookahead", "local_corr", "local_ridge"]

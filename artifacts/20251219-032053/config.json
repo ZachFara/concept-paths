@@ -1,0 +1,10 @@
+{
+  "ablation": {
+    "selectors": [
+      "lookahead",
+      "local_corr",
+      "local_ridge"
+    ],
+    "top_m": 50
+  },
+  "artifacts_dir": 

@@ -17,7 +17,9 @@ def set_seed(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
-def get_device() -> torch.device:
+def get_device(override: Optional[str] = None) -> torch.device:
+    if override:
+        return torch.device(override)
     if torch.backends.mps.is_available():
         return torch.device("mps")
     if torch.cuda.is_available():
