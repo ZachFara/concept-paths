@@ -3,8 +3,10 @@ from __future__ import annotations
 from typing import Any, List, Tuple
 
 import torch
+from transformers import AutoModel, AutoTokenizer
 
 from .base import ModelAdapter
+from ..utils import get_device
 
 
 class DistilBERTAdapter(ModelAdapter):
@@ -15,6 +17,15 @@ class DistilBERTAdapter(ModelAdapter):
     """
 
     adapter_name = "distilbert"
+
+    def __init__(self, model_name: str, *, device: str | None = None, local_files_only: bool = True):
+        self.model_name = model_name
+        self.device = get_device(device)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name, local_files_only=local_files_only)
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token or self.tokenizer.cls_token
+        self.model = AutoModel.from_pretrained(model_name, local_files_only=local_files_only).to(self.device)
+        self.model.eval()
 
     def list_layers(self) -> List[Any]:
         if hasattr(self.model, "transformer") and hasattr(self.model.transformer, "layer"):
