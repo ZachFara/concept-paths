@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
@@ -14,6 +14,7 @@ from tqdm import tqdm
 from .capture import _get_blocks, ensure_scanned, resolve_device
 from .data import DeltaPair
 from .metrics import deltas_from_pairs
+from .geometry import ridge_coeffs
 from .utils import atomic_save_npz, ensure_dir, get_device, maybe_load_npz
 
 
@@ -22,6 +23,7 @@ class NeuronSelection:
     layer: int
     neuron_idx: np.ndarray  # [m]
     score: np.ndarray  # [m] (correlation)
+    selector: str = "lookahead"
 
 
 def _unit(v: np.ndarray, eps: float = 1e-12) -> np.ndarray:
@@ -142,27 +144,46 @@ def corr_with_scalar(x: np.ndarray, s: np.ndarray, eps: float = 1e-12) -> np.nda
     return (num / denom).astype(np.float32)
 
 
-def select_top_neurons(
+def select_neurons(
     *,
+    selector: str,
     deltas_resid: np.ndarray,
     deltas_resid_next: np.ndarray,
     deltas_mlp: np.ndarray,
     layer: int,
     top_m: int,
+    ordinal: Optional[np.ndarray] = None,
 ) -> NeuronSelection:
     """
-    Select top neurons by |corr(Δmlp_neuron, proj(Δh_{l+1}, concept_dir_l))|.
-
-    deltas_resid: [n_pairs, n_layers, hidden]
-    deltas_resid_next: [n_pairs, hidden] is deltas_resid[:, layer+1, :]
-    deltas_mlp: [n_pairs, d_mlp] is Δ at layer's MLP act.
+    Select neurons using one of several strategies:
+      - lookahead: corr(Δmlp_j, <Δh_{l+1}, concept_dir_l>)
+      - local_corr: corr(Δmlp_j, <Δh_l, concept_dir_l>)
+      - local_ridge: |ridge coeff| predicting ordinal from Δmlp (layer local)
     """
+    selector = selector.lower()
     concept_dir = concept_direction_pc1(deltas_resid[:, layer, :])
-    proj = deltas_resid_next @ concept_dir  # [n_pairs]
-    corr = corr_with_scalar(deltas_mlp, proj)
-    order = np.argsort(-np.abs(corr))
+    if selector == "lookahead":
+        proj = deltas_resid_next @ concept_dir
+        scores = corr_with_scalar(deltas_mlp, proj)
+    elif selector == "local_corr":
+        proj = deltas_resid[:, layer, :] @ concept_dir
+        scores = corr_with_scalar(deltas_mlp, proj)
+    elif selector == "local_ridge":
+        if ordinal is None:
+            raise ValueError("ordinal labels required for local_ridge selector")
+        coeffs = ridge_coeffs(deltas_mlp, ordinal)
+        scores = coeffs.astype(np.float32)
+    else:
+        raise ValueError(f"Unknown selector {selector}")
+
+    order = np.argsort(-np.abs(scores))
     sel = order[:top_m]
-    return NeuronSelection(layer=layer, neuron_idx=sel.astype(np.int64), score=corr[sel])
+    return NeuronSelection(
+        layer=layer,
+        neuron_idx=sel.astype(np.int64),
+        score=scores[sel],
+        selector=selector,
+    )
 
 
 @torch.no_grad()
@@ -249,6 +270,7 @@ def eval_ablation_effect(
     batch_size: int,
     device: torch.device | None = None,
     rng: np.random.Generator | None = None,
+    anti_indices: Optional[np.ndarray] = None,
 ) -> dict[str, float]:
     """
     Evaluate change in projection magnitude at layer+1 before/after neuron ablation,
@@ -295,23 +317,42 @@ def eval_ablation_effect(
         desc=f"ablate:eval:rand:L{layer}",
     )
 
+    anti_h = None
+    if anti_indices is not None and len(anti_indices) > 0:
+        anti_h = capture_last_token_resid_layer_with_ablation(
+            lm,
+            prompts,
+            ablate_layer=layer,
+            neuron_idx=anti_indices,
+            capture_layer=layer + 1,
+            batch_size=batch_size,
+            device=device,
+            desc=f"ablate:eval:anti:L{layer}",
+        )
+
     # Compute Δ from captured layer+1 residuals
     key_to_row = {k: i for i, k in enumerate(keys)}
     neg_rows = np.array([key_to_row[p.neg_key] for p in pairs], dtype=np.int64)
     pos_rows = np.array([key_to_row[p.pos_key] for p in pairs], dtype=np.int64)
     delta_ablated = (ablated_h[pos_rows] - ablated_h[neg_rows]).astype(np.float32)
     delta_rand = (rand_h[pos_rows] - rand_h[neg_rows]).astype(np.float32)
+    delta_anti = None if anti_h is None else (anti_h[pos_rows] - anti_h[neg_rows]).astype(np.float32)
 
     ablated = projection_magnitude(delta_ablated, concept_dir)
     rand = projection_magnitude(delta_rand, concept_dir)
+    anti = projection_magnitude(delta_anti, concept_dir) if delta_anti is not None else None
 
-    return {
+    out = {
         "baseline": baseline,
         "ablated": ablated,
         "random_ablated": rand,
         "effect": baseline - ablated,
         "random_effect": baseline - rand,
     }
+    if anti is not None:
+        out["anti_ablated"] = anti
+        out["anti_effect"] = baseline - anti
+    return out
 
 
 def save_neuron_selections_csv(selections: list[NeuronSelection], outpath: Path) -> None:

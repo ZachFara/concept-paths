@@ -1,13 +1,14 @@
 # Concept-Paths (nnsight)
 
 Minimal research codebase for **concept-path tracking** of sentiment in a causal transformer using **nnsight**.
+Upgraded to include multi-seed aggregation, permutation/null controls, random baselines, leakage guards, reproducibility manifests, and unified CLI entrypoints.
 
 It:
-- builds a controlled template-based sentiment sweep dataset (discovery vs evaluation are disjoint),
+- builds controlled template-based sentiment stimuli (discovery vs evaluation are disjoint; multiple template families; optional permutation/unordered nulls),
 - captures **residual stream activations** at every transformer block (last-token pooling),
 - computes per-layer PCA on small sentiment-step Δ vectors (PC1 variance + k90),
 - computes **subspace rotation** between adjacent layers via principal angles,
-- (optional) runs a simple **MLP neuron ablation** experiment without label leakage.
+- runs MLP neuron ablation experiments with multiple selectors and sham controls.
 
 ## Setup
 
@@ -21,52 +22,29 @@ Notes:
 - Default model is `gpt2`. The scripts default to `--local-files-only`, so you need the model cached locally.
 - If you need to download models, set `--no-local-files-only` (requires network) or pre-download via Hugging Face.
 
-## Run (end-to-end)
-
-From the repo root:
-
-### PCA (k90 + top PC variance)
+## Run (end-to-end, unified CLI)
 
 ```bash
-python scripts/run_pca.py --model gpt2 --batch-size 16 --seed 0
+python -m src.cli run_all --config configs/default.yaml
 ```
 
-Outputs:
-- `plots/pca_k90_by_layer.png`
-- `plots/top_pc_variance_by_layer.png`
+This runs geometry (main + permutation + unordered controls), random baselines, and ablation selectors, and writes:
+- plots in `<artifacts>/<run_id>/plots`
+- arrays/manifests in `<artifacts>/<run_id>/`
+- docs in `<artifacts>/<run_id>/docs/`
+- a short `report.md`
 
-### Subspace rotation (principal angles)
-
-```bash
-python scripts/run_rotation.py --model gpt2 --batch-size 16 --seed 0
-```
-
-Outputs:
-- `plots/subspace_rotation_by_layer.png`
-
-### Optional: ablation experiment (no leakage)
-
-This:
-- uses the **discovery** split to compute a per-layer concept direction (PC1 of Δh_l),
-- selects neurons by correlation on discovery only,
-- evaluates projection change on **evaluation** only,
-- includes random-neuron ablation as a control.
-
-```bash
-python scripts/run_ablation.py --model gpt2 --batch-size 16 --seed 0 --top-m 50
-```
-
-Outputs:
-- `plots/ablation_effect.png`
-- `artifacts/selected_neurons.csv`
+## Legacy scripts (shims)
+`scripts/run_pca.py`, `scripts/run_rotation.py`, `scripts/run_ablation.py` now forward to the unified CLI with a deprecation notice.
 
 ## What to edit
 
 - Dataset templates / adjectives + split rules: `src/config.py`
-- Dataset generation + Δ pair construction: `src/data.py`
-- nnsight capture utilities: `src/capture.py`
-- PCA + rotation metrics: `src/metrics.py`
-- Ablation experiment: `src/ablate.py`
+- Stimulus generation and leakage guards: `src/stimuli.py`
+- nnsight capture utilities: `src/capture.py` (newer: `src/activations.py`)
+- PCA + rotation metrics: `src/metrics.py` (newer: `src/geometry.py`)
+- Ablation experiment: `src/ablate.py` (with multiple selectors/controls)
+- Unified orchestration + CLI: `src/experiments/pipeline.py`, `src/cli.py`
 
 ## Artifacts and caching
 
@@ -83,4 +61,3 @@ Plots are written to `plots/`.
 
 The code will use **Apple Silicon MPS** if available, otherwise CPU.
 If nnsight scanning is unstable on MPS for a particular setup, it automatically falls back to CPU for tracing.
-
