@@ -58,7 +58,10 @@ def _pick_synonyms(synonyms: Dict[str, List[str]], n_per_level: int, rng: np.ran
     return picked
 
 
-def _shuffle_labels_preserve_counts(levels: List[int], rng: np.random.Generator) -> List[int]:
+def shuffle_labels_preserve_counts(levels: List[int], rng: np.random.Generator) -> List[int]:
+    """
+    Shuffle labels while preserving per-level counts.
+    """
     arr = np.array(levels, dtype=np.int64)
     rng.shuffle(arr)
     return arr.tolist()
@@ -155,7 +158,7 @@ def generate_samples(
                 )
 
     if control.random_labels and not control.unrelated_labels:
-        shuffled = _shuffle_labels_preserve_counts([s.level for s in samples], rng)
+        shuffled = shuffle_labels_preserve_counts([s.level for s in samples], rng)
         for s, new_level in zip(samples, shuffled, strict=True):
             s.metadata["original_level"] = s.level
             object.__setattr__(s, "level", int(new_level))

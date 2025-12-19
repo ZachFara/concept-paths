@@ -1,149 +1,230 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Literal
+from typing import Dict, List, Literal, Optional, Tuple
 
 import numpy as np
 from scipy.linalg import subspace_angles
 from sklearn.decomposition import PCA
 
-from .data import DeltaPair
+from .data import Sample, shuffle_labels_preserve_counts
 
 
-@dataclass(frozen=True)
-class PCAMetrics:
-    top_pc_ratio: np.ndarray  # [n_layers]
-    k90: np.ndarray  # [n_layers] int
-
-
-def deltas_from_pairs(
+def compute_deltas(
+    samples: List[Sample],
+    residual: np.ndarray,
     *,
-    keys: list[str],
-    acts: np.ndarray,
-    pairs: list[DeltaPair],
+    method: Literal["adjacent"] = "adjacent",
 ) -> np.ndarray:
     """
-    Convert paired activations into Δ vectors per layer.
+    Build Δ vectors per layer for adjacent levels within each template.
 
-    acts: [n_samples, n_layers, hidden]
-    returns: [n_pairs, n_layers, hidden] where Δ = h(pos) - h(neg)
+    residual: [N, L, H] aligned with samples order.
+    returns: [P, L, H]
     """
-    key_to_row = {k: i for i, k in enumerate(keys)}
-    n_pairs = len(pairs)
-    if n_pairs == 0:
-        return np.zeros((0,) + acts.shape[1:], dtype=np.float32)
+    if residual.shape[0] != len(samples):
+        raise ValueError("Residual rows must match number of samples")
+    if method != "adjacent":
+        raise ValueError("Only 'adjacent' method supported")
+    # Group indices by (template_id, level)
+    by_template: Dict[int, Dict[int, List[int]]] = {}
+    for idx, s in enumerate(samples):
+        by_template.setdefault(s.template_id, {}).setdefault(s.level, []).append(idx)
+    pairs: List[Tuple[int, int]] = []
+    for template_id, levels in by_template.items():
+        max_level = max(levels.keys())
+        for lvl in range(max_level):
+            if lvl not in levels or (lvl + 1) not in levels:
+                continue
+            for i in levels[lvl]:
+                for j in levels[lvl + 1]:
+                    pairs.append((i, j))
+    if not pairs:
+        return np.zeros((0,) + residual.shape[1:], dtype=np.float32)
+    neg_idx = np.array([i for i, _ in pairs], dtype=np.int64)
+    pos_idx = np.array([j for _, j in pairs], dtype=np.int64)
+    deltas = residual[pos_idx] - residual[neg_idx]
+    return deltas.astype(np.float32)
 
-    neg_rows = np.array([key_to_row[p.neg_key] for p in pairs], dtype=np.int64)
-    pos_rows = np.array([key_to_row[p.pos_key] for p in pairs], dtype=np.int64)
-    return (acts[pos_rows] - acts[neg_rows]).astype(np.float32)
+
+def _pca_layer(x: np.ndarray, thresholds: List[float]) -> Tuple[float, Dict[float, int], np.ndarray]:
+    """
+    Run PCA on [P, H] returning top_pc ratio, k thresholds, and components (basis).
+    """
+    if x.shape[0] < 2:
+        return np.nan, {t: 0 for t in thresholds}, np.zeros((x.shape[1], 0), dtype=np.float32)
+    pca = PCA(svd_solver="full")
+    pca.fit(x)
+    evr = pca.explained_variance_ratio_
+    top_pc = float(evr[0]) if evr.size else np.nan
+    k_dict: Dict[float, int] = {}
+    cum = np.cumsum(evr)
+    for t in thresholds:
+        k = int(np.searchsorted(cum, t, side="left") + 1)
+        k_dict[t] = min(k, evr.size)
+    comps = pca.components_.T  # [H, K]
+    return top_pc, k_dict, comps
 
 
-def pca_metrics_by_layer(
+def compute_pca_metrics(
     deltas: np.ndarray,
     *,
-    solver: Literal["full", "randomized"] = "full",
-    variance_threshold: float = 0.90,
-) -> PCAMetrics:
+    thresholds: List[float] = [0.8, 0.9, 0.95],
+) -> Tuple[np.ndarray, Dict[float, np.ndarray], List[np.ndarray]]:
     """
-    For each layer l, run PCA on Δh_l and compute:
-      - top PC explained variance ratio
-      - k90: number of PCs to reach 90% cumulative variance
+    Returns pc1 curve, k curves per threshold, and subspace bases per layer.
     """
     if deltas.ndim != 3:
-        raise ValueError(f"Expected deltas [n_pairs, n_layers, hidden], got {deltas.shape}")
-
-    n_pairs, n_layers, hidden = deltas.shape
-    top_pc = np.zeros((n_layers,), dtype=np.float64)
-    k90 = np.zeros((n_layers,), dtype=np.int64)
-
-    for layer in range(n_layers):
-        x = deltas[:, layer, :]  # [n_pairs, hidden]
-        # sklearn requires at least 2 samples; if too small, return degenerate values.
-        if x.shape[0] < 2:
-            top_pc[layer] = np.nan
-            k90[layer] = 0
-            continue
-
-        pca = PCA(svd_solver=solver, whiten=False)
-        pca.fit(x)
-        evr = pca.explained_variance_ratio_
-        top_pc[layer] = float(evr[0]) if evr.size else np.nan
-
-        cum = np.cumsum(evr)
-        k = int(np.searchsorted(cum, variance_threshold, side="left") + 1)
-        k90[layer] = min(k, evr.size)
-
-    return PCAMetrics(top_pc_ratio=top_pc.astype(np.float32), k90=k90)
+        raise ValueError("deltas must be [P, L, H]")
+    _, n_layers, _ = deltas.shape
+    pc1 = np.zeros((n_layers,), dtype=np.float32)
+    k_curves: Dict[float, np.ndarray] = {t: np.zeros((n_layers,), dtype=np.int64) for t in thresholds}
+    bases: List[np.ndarray] = []
+    for l in range(n_layers):
+        top_pc, k_dict, comps = _pca_layer(deltas[:, l, :], thresholds)
+        pc1[l] = top_pc
+        for t in thresholds:
+            k_curves[t][l] = k_dict[t]
+        bases.append(comps.astype(np.float32))
+    return pc1, k_curves, bases
 
 
-def _layer_pca_basis(
-    x: np.ndarray,
+def compute_rotation_metrics(
+    bases: List[np.ndarray],
     *,
-    k: int,
-    solver: Literal["full", "randomized"] = "full",
-) -> np.ndarray:
-    """
-    Return an orthonormal basis U for the top-k PCA subspace of x.
-    U has shape [hidden, k].
-    """
-    pca = PCA(n_components=min(k, x.shape[0], x.shape[1]), svd_solver=solver, whiten=False)
-    pca.fit(x)
-    comps = pca.components_  # [k, hidden] rows are PCs
-    u = comps[:k].T  # [hidden, k]
-    # sklearn components_ are already orthonormal (up to numerical precision)
-    return u
-
-
-def rotation_by_layer(
-    deltas: np.ndarray,
-    *,
-    solver: Literal["full", "randomized"] = "full",
     k_mode: Literal["fixed", "min10_k90"] = "min10_k90",
     k_fixed: int = 5,
-    k90: np.ndarray | None = None,
-    metric: Literal["mean_deg", "sum_deg"] = "mean_deg",
+    k90: Optional[np.ndarray] = None,
 ) -> np.ndarray:
-    """
-    Compute subspace rotation between adjacent layers using principal angles.
-
-    Returns rotation[l] for (layer l) -> (layer l+1); shape [n_layers - 1]
-    """
-    if deltas.ndim != 3:
-        raise ValueError(f"Expected deltas [n_pairs, n_layers, hidden], got {deltas.shape}")
-
-    n_pairs, n_layers, hidden = deltas.shape
-    if n_layers < 2:
+    if len(bases) < 2:
         return np.zeros((0,), dtype=np.float32)
-
-    if k_mode == "min10_k90" and k90 is None:
-        raise ValueError("k90 must be provided when k_mode='min10_k90'")
-
-    rot = np.zeros((n_layers - 1,), dtype=np.float64)
-
-    for layer in range(n_layers - 1):
-        x_l = deltas[:, layer, :]
-        x_lp1 = deltas[:, layer + 1, :]
-        if x_l.shape[0] < 2 or x_lp1.shape[0] < 2:
-            rot[layer] = np.nan
+    rot = np.zeros((len(bases) - 1,), dtype=np.float32)
+    for i in range(len(bases) - 1):
+        a = bases[i]
+        b = bases[i + 1]
+        if a.shape[0] == 0 or b.shape[0] == 0:
+            rot[i] = np.nan
             continue
-
         if k_mode == "fixed":
-            k = k_fixed
+            k = min(k_fixed, a.shape[1], b.shape[1])
         else:
-            k = int(min(10, int(k90[layer])))
-            k = max(k, 1)
-
-        k = int(min(k, x_l.shape[0], x_l.shape[1], x_lp1.shape[0], x_lp1.shape[1]))
+            if k90 is None:
+                raise ValueError("k90 required for min10_k90")
+            k = min(int(max(1, min(10, k90[i]))), a.shape[1], b.shape[1])
         if k < 1:
-            rot[layer] = np.nan
+            rot[i] = np.nan
             continue
+        angles = subspace_angles(a[:, :k], b[:, :k])
+        rot[i] = float(np.mean(angles * (180.0 / np.pi)))
+    return rot
 
-        u_l = _layer_pca_basis(x_l, k=k, solver=solver)  # [hidden, k]
-        u_lp1 = _layer_pca_basis(x_lp1, k=k, solver=solver)
-        angles = subspace_angles(u_l, u_lp1)  # radians, [k]
-        angles_deg = angles * (180.0 / np.pi)
 
-        rot[layer] = float(np.mean(angles_deg) if metric == "mean_deg" else np.sum(angles_deg))
+def bootstrap_curves(
+    deltas: np.ndarray,
+    *,
+    n_boot: int = 100,
+    thresholds: List[float] = [0.8, 0.9, 0.95],
+    k_mode: Literal["fixed", "min10_k90"] = "min10_k90",
+    k_fixed: int = 5,
+) -> Dict[str, np.ndarray]:
+    rng = np.random.default_rng(0)
+    pc1_samples = []
+    k_samples = {t: [] for t in thresholds}
+    rot_samples = []
+    n = deltas.shape[0]
+    for _ in range(n_boot):
+        idx = rng.choice(n, size=n, replace=True)
+        boot = deltas[idx]
+        pc1, k_curves, bases = compute_pca_metrics(boot, thresholds=thresholds)
+        rot = compute_rotation_metrics(bases, k_mode=k_mode, k_fixed=k_fixed, k90=k_curves[0.9])
+        pc1_samples.append(pc1)
+        rot_samples.append(rot)
+        for t in thresholds:
+            k_samples[t].append(k_curves[t])
+    pc1_arr = np.stack(pc1_samples)
+    rot_arr = np.stack(rot_samples)
+    k_arrs = {t: np.stack(v) for t, v in k_samples.items()}
+    def ci(arr: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        return np.percentile(arr, 2.5, axis=0), np.percentile(arr, 97.5, axis=0)
+    out = {
+        "pc1_mean": pc1_arr.mean(axis=0),
+        "pc1_ci_low": ci(pc1_arr)[0],
+        "pc1_ci_high": ci(pc1_arr)[1],
+        "rotation_mean": rot_arr.mean(axis=0),
+        "rotation_ci_low": ci(rot_arr)[0],
+        "rotation_ci_high": ci(rot_arr)[1],
+    }
+    for t, arr in k_arrs.items():
+        low, high = ci(arr)
+        out[f"k{int(t*100)}_mean"] = arr.mean(axis=0)
+        out[f"k{int(t*100)}_ci_low"] = low
+        out[f"k{int(t*100)}_ci_high"] = high
+    return out
 
-    return rot.astype(np.float32)
 
+def permutation_null(
+    samples: List[Sample],
+    residual: np.ndarray,
+    *,
+    n_shuffles: int,
+    thresholds: List[float],
+    early_layers: List[int],
+    late_layers: List[int],
+) -> Tuple[List[float], List[float]]:
+    rng = np.random.default_rng(0)
+    null_k_scores: List[float] = []
+    null_rot_scores: List[float] = []
+    levels = [s.level for s in samples]
+    level_labels = [s.level_label for s in samples]
+    unique_levels = sorted(set(level_labels))
+    for _ in range(n_shuffles):
+        shuffled_levels = shuffle_labels_preserve_counts(levels, rng)
+        shuffled_samples: List[Sample] = []
+        for s, new_lvl in zip(samples, shuffled_levels, strict=True):
+            new_label = unique_levels[new_lvl % len(unique_levels)]
+            shuffled_samples.append(
+                Sample(
+                    sample_id=s.sample_id,
+                    concept_name=s.concept_name,
+                    level=int(new_lvl),
+                    level_label=new_label,
+                    template_id=s.template_id,
+                    template_text=s.template_text,
+                    synonym=s.synonym,
+                    prompt_text=s.prompt_text,
+                    metadata=s.metadata,
+                )
+            )
+        deltas = compute_deltas(shuffled_samples, residual)
+        pc1, k_curves, bases = compute_pca_metrics(deltas, thresholds=thresholds)
+        rot = compute_rotation_metrics(bases, k_mode="min10_k90", k90=k_curves[0.9])
+        k_score, r_score = summary_scores(
+            k_curves[0.9],
+            rot,
+            early_layers=early_layers,
+            late_layers=late_layers,
+        )
+        null_k_scores.append(k_score)
+        null_rot_scores.append(r_score)
+    return null_k_scores, null_rot_scores
+
+
+def summary_scores(
+    k_curve: np.ndarray,
+    rot_curve: np.ndarray,
+    *,
+    early_layers: List[int],
+    late_layers: List[int],
+) -> Tuple[float, float]:
+    def _idx(idx_list: List[int], n: int) -> List[int]:
+        out = []
+        for i in idx_list:
+            out.append(i if i >= 0 else n + i)
+        return [i for i in out if 0 <= i < n]
+
+    k_idx_e = _idx(early_layers, len(k_curve))
+    k_idx_l = _idx(late_layers, len(k_curve))
+    r_idx_e = _idx(early_layers[:-1], len(rot_curve))
+    r_idx_l = _idx(late_layers[:-1], len(rot_curve))
+    k_score = float(np.nanmean(k_curve[k_idx_l]) - np.nanmean(k_curve[k_idx_e])) if k_idx_e and k_idx_l else 0.0
+    r_score = float(np.nanmean(rot_curve[r_idx_e]) - np.nanmean(rot_curve[r_idx_l])) if r_idx_e and r_idx_l and len(rot_curve)>0 else 0.0
+    return k_score, r_score
