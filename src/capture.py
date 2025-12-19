@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
-from .adapters import GPT2Adapter, ModelAdapter, OPTAdapter
+from .adapters import GPT2Adapter, ModelAdapter, OPTAdapter, DistilBERTAdapter
 from .config import ControlSpec, DataSpec, ExperimentConfig, load_experiment_config
 from .data import generate_samples
 from .utils import atomic_save_npz, ensure_dir, hash_splits, maybe_load_npz, runtime_metadata, write_manifest_file
@@ -26,8 +26,10 @@ def _select_adapter(adapter_name: str, model_name: str, local_files_only: bool =
     adapter_name = adapter_name.lower()
     if adapter_name in ("gpt2", "distilgpt2"):
         return GPT2Adapter(model_name, device=device, local_files_only=local_files_only)
-    if adapter_name in ("opt", "opt-125m"):
+    if adapter_name in ("opt", "opt-125m", "facebook/opt-125m"):
         return OPTAdapter(model_name, device=device, local_files_only=local_files_only)
+    if adapter_name in ("distilbert", "distilbert-base-uncased"):
+        return DistilBERTAdapter(model_name, device=device, local_files_only=local_files_only)
     # default fallback: try GPT2Adapter
     return GPT2Adapter(model_name, device=device, local_files_only=local_files_only)
 

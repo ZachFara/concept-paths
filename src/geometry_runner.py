@@ -31,6 +31,7 @@ def run_geometry(
     model: str,
     batch_size: int,
     use_cache: bool = True,
+    local_files_only: bool = True,
     thresholds: List[float] = [0.8, 0.9, 0.95],
     n_boot: int = 100,
     early_layers: List[int] = [0, 1, 2],
@@ -46,7 +47,7 @@ def run_geometry(
         batch_size=batch_size,
         artifacts_dir=artifacts_dir,
         use_cache=use_cache,
-        local_files_only=True,
+        local_files_only=local_files_only,
     )
     deltas = compute_deltas(samples, cache.residual)
     pc1, k_curves, bases = compute_pca_metrics(deltas, thresholds=thresholds)
@@ -152,6 +153,7 @@ def run_controls(
     early_layers: List[int],
     late_layers: List[int],
     use_cache: bool = True,
+    local_files_only: bool = True,
 ) -> dict:
     samples, dataset_sig = generate_samples(cfg, data_spec=data_spec, control=control_spec)
     cache = capture_activations(
@@ -163,7 +165,7 @@ def run_controls(
         batch_size=batch_size,
         artifacts_dir=artifacts_dir,
         use_cache=use_cache,
-        local_files_only=True,
+        local_files_only=local_files_only,
     )
     deltas = compute_deltas(samples, cache.residual)
     pc1, k_curves, bases = compute_pca_metrics(deltas, thresholds=thresholds)

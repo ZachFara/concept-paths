@@ -1,15 +1,15 @@
 {
   "dataset_signature": "877f401e747634ffd0fd56b6c3c7875f517f40515c8be34249c343e300666221",
-  "k90_expansion": 2.666666666666668,
+  "k90_expansion": 2.0,
   "metadata": {
     "adapter": "gpt2",
     "concept": "sentiment",
     "dataset_signature": "877f401e747634ffd0fd56b6c3c7875f517f40515c8be34249c343e300666221",
-    "model_name": "distilgpt2",
+    "model_name": "gpt2",
     "seed": 0,
     "split": "discovery",
     "split_signature": "a94d4106ac4d8f3027e2cb4a1dbea9d269b71af40cf233567ee2cb493736ca99",
     "template_family": "main"
   },
-  "rotation_decay": 14.182323455810547
+  "rotation_decay": 22.900375366210938
 }

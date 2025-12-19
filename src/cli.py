@@ -77,9 +77,10 @@ def parse_args() -> argparse.Namespace:
     allp.add_argument("--paper_figures", type=str, default="paper_figures")
     allp.add_argument("--model", type=str, default="distilgpt2")
     allp.add_argument("--adapter", type=str, default="gpt2")
-    allp.add_argument("--second_model", type=str, default="facebook/opt-125m")
-    allp.add_argument("--second_adapter", type=str, default="opt")
+    allp.add_argument("--second_model", type=str, default="distilbert-base-uncased")
+    allp.add_argument("--second_adapter", type=str, default="distilbert")
     allp.add_argument("--batch_size", type=int, default=4)
+    allp.add_argument("--local_files_only", type=int, default=1)
     geo = sub.add_parser("geometry", help="Compute geometry metrics from cached activations (or capture if missing)")
     geo.add_argument("--config", type=str, default=None)
     geo.add_argument("--concept", type=str, default="sentiment")
@@ -92,6 +93,7 @@ def parse_args() -> argparse.Namespace:
     geo.add_argument("--use_cache", type=int, default=1)
     geo.add_argument("--n_boot", type=int, default=50)
     geo.add_argument("--artifacts_dir", type=str, default="artifacts")
+    geo.add_argument("--local_files_only", type=int, default=1)
 
     ctrl = sub.add_parser("controls", help="Random label controls and permutation tests")
     ctrl.add_argument("--config", type=str, default=None)
@@ -105,6 +107,7 @@ def parse_args() -> argparse.Namespace:
     ctrl.add_argument("--n_shuffles", type=int, default=50)
     ctrl.add_argument("--artifacts_dir", type=str, default="artifacts")
     ctrl.add_argument("--use_cache", type=int, default=1)
+    ctrl.add_argument("--local_files_only", type=int, default=1)
     return parser.parse_args()
 
 
@@ -159,6 +162,7 @@ def cmd_geometry(args: argparse.Namespace) -> None:
         batch_size=args.batch_size,
         use_cache=bool(args.use_cache),
         n_boot=args.n_boot,
+        local_files_only=bool(getattr(args, "local_files_only", 1)),
     )
 
 
@@ -186,6 +190,7 @@ def cmd_controls(args: argparse.Namespace) -> None:
         early_layers=[0, 1, 2],
         late_layers=[-3, -2, -1],
         use_cache=bool(args.use_cache),
+        local_files_only=bool(getattr(args, "local_files_only", 1)),
     )
 
 
@@ -294,6 +299,7 @@ def cmd_run_all(args: argparse.Namespace) -> None:
         model=args.model,
         batch_size=args.batch_size,
         use_cache=use_cache,
+        local_files_only=bool(args.local_files_only),
     )
     run_controls(
         cfg=cfg,
@@ -308,6 +314,7 @@ def cmd_run_all(args: argparse.Namespace) -> None:
         early_layers=[0, 1, 2],
         late_layers=[-3, -2, -1],
         use_cache=use_cache,
+        local_files_only=bool(args.local_files_only),
     )
     # Ablation
     samples_eval, _ = generate_samples(cfg, data_spec=DataSpec(concept="sentiment", split="eval", template_family=cfg.data.template_family, seed=cfg.data.seed, n_levels=cfg.data.n_levels, n_per_level=cfg.data.n_per_level), control=ControlSpec())
@@ -320,9 +327,11 @@ def cmd_run_all(args: argparse.Namespace) -> None:
         batch_size=args.batch_size,
         artifacts_dir=artifacts_dir,
         use_cache=use_cache,
-        local_files_only=True,
+        local_files_only=bool(args.local_files_only),
     )
     adapter_obj = _select_adapter(args.adapter, args.model, local_files_only=True)
+    if not bool(args.local_files_only):
+        adapter_obj = _select_adapter(args.adapter, args.model, local_files_only=False)
     run_ablation_pipeline(
         adapter=adapter_obj,
         samples=samples_eval,
@@ -373,18 +382,23 @@ def cmd_run_all(args: argparse.Namespace) -> None:
         model=args.model,
         batch_size=args.batch_size,
         use_cache=use_cache,
+        local_files_only=bool(args.local_files_only),
     )
     # Second model geometry (sentiment)
-    run_geometry(
-        cfg=cfg,
-        data_spec=DataSpec(concept="sentiment", split="discovery", template_family=cfg.data.template_family, seed=cfg.data.seed, n_levels=cfg.data.n_levels, n_per_level=cfg.data.n_per_level),
-        control_spec=ControlSpec(),
-        artifacts_dir=artifacts_dir,
-        adapter=args.second_adapter,
-        model=args.second_model,
-        batch_size=args.batch_size,
-        use_cache=use_cache,
-    )
+    try:
+        run_geometry(
+            cfg=cfg,
+            data_spec=DataSpec(concept="sentiment", split="discovery", template_family=cfg.data.template_family, seed=cfg.data.seed, n_levels=cfg.data.n_levels, n_per_level=cfg.data.n_per_level),
+            control_spec=ControlSpec(),
+            artifacts_dir=artifacts_dir,
+            adapter=args.second_adapter,
+            model=args.second_model,
+            batch_size=args.batch_size,
+            use_cache=use_cache,
+            local_files_only=bool(args.local_files_only),
+        )
+    except OSError:
+        print(f"Skipping second model {args.second_model} (not cached and offline).")
     _copy_paper_figures(artifacts_dir / "plots", Path(args.paper_figures))
     manifest = runtime_metadata()
     manifest.update({"model": args.model, "adapter": args.adapter, "second_model": args.second_model})

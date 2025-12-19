@@ -1,5 +1,6 @@
 from .base import ModelAdapter
 from .gpt2 import GPT2Adapter
 from .opt import OPTAdapter
+from .distilbert import DistilBERTAdapter
 
-__all__ = ["ModelAdapter", "GPT2Adapter", "OPTAdapter"]
+__all__ = ["ModelAdapter", "GPT2Adapter", "OPTAdapter", "DistilBERTAdapter"]

@@ -87,9 +87,14 @@ class ModelAdapter:
             res_stack = torch.stack(res_layers, dim=1)  # [B, L, S, H]
             mlp_stack = torch.stack(mlp_layers, dim=1)  # [B, L, S, d_mlp]
             bsz = input_ids.shape[0]
-            arange = torch.arange(bsz, device=self.device)
-            pooled_res = res_stack[arange, :, last_idx, :].detach().cpu().numpy()
-            pooled_mlp = mlp_stack[arange, :, last_idx, :].detach().cpu().numpy()
+            # Gather last token along sequence dim
+            idx = last_idx.view(bsz, 1, 1, 1)
+            res_idx = idx.expand(-1, res_stack.shape[1], 1, res_stack.shape[3])
+            mlp_idx = idx.expand(-1, mlp_stack.shape[1], 1, mlp_stack.shape[3])
+            res_gather = res_stack.gather(2, res_idx)
+            mlp_gather = mlp_stack.gather(2, mlp_idx)
+            pooled_res = res_gather.squeeze(2).detach().cpu().numpy()
+            pooled_mlp = mlp_gather.squeeze(2).detach().cpu().numpy()
             residual_chunks.append(pooled_res)
             mlp_chunks.append(pooled_mlp)
         if residual_chunks:
