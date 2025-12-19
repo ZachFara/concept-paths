@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import shutil
+import json
 
 from .config import ControlSpec, DataSpec, ExperimentConfig, load_experiment_config
 from .data import generate_samples
@@ -10,7 +12,7 @@ from .ablation import run_ablation_pipeline
 from .specificity import run_specificity
 from .behavior import run_behavior, ablation_impact_on_behavior
 from .geometry_runner import run_controls, run_geometry
-from .utils import ensure_dir
+from .utils import ensure_dir, runtime_metadata, write_manifest_file
 
 
 def parse_args() -> argparse.Namespace:
@@ -67,6 +69,17 @@ def parse_args() -> argparse.Namespace:
     beh.add_argument("--selection_method", type=str, default="variance")
     beh.add_argument("--use_cache", type=int, default=1)
     beh.add_argument("--artifacts_dir", type=str, default="artifacts")
+
+    allp = sub.add_parser("run_all", help="End-to-end pipeline")
+    allp.add_argument("--config", type=str, default=None)
+    allp.add_argument("--use_cache", type=int, default=1)
+    allp.add_argument("--artifacts_dir", type=str, default="artifacts")
+    allp.add_argument("--paper_figures", type=str, default="paper_figures")
+    allp.add_argument("--model", type=str, default="distilgpt2")
+    allp.add_argument("--adapter", type=str, default="gpt2")
+    allp.add_argument("--second_model", type=str, default="facebook/opt-125m")
+    allp.add_argument("--second_adapter", type=str, default="opt")
+    allp.add_argument("--batch_size", type=int, default=4)
     geo = sub.add_parser("geometry", help="Compute geometry metrics from cached activations (or capture if missing)")
     geo.add_argument("--config", type=str, default=None)
     geo.add_argument("--concept", type=str, default="sentiment")
@@ -253,6 +266,131 @@ def cmd_behavior(args: argparse.Namespace) -> None:
     )
 
 
+def _copy_paper_figures(src_dir: Path, dst_dir: Path) -> None:
+    ensure_dir(dst_dir)
+    figures = []
+    for fname in ["pc1_sentiment_discovery.png", "rotation_sentiment_discovery.png", "k90_sentiment_discovery.png"]:
+        src = src_dir / fname
+        if src.exists():
+            dst = dst_dir / fname
+            shutil.copy(src, dst)
+            figures.append(str(dst))
+    index = dst_dir / "index.json"
+    index.write_text(json.dumps({"figures": figures}, indent=2, sort_keys=True))
+
+
+def cmd_run_all(args: argparse.Namespace) -> None:
+    cfg: ExperimentConfig = load_experiment_config(Path(args.config) if args.config else None)
+    artifacts_dir = Path(args.artifacts_dir)
+    ensure_dir(artifacts_dir)
+    use_cache = bool(args.use_cache)
+    # Sentiment main
+    run_geometry(
+        cfg=cfg,
+        data_spec=DataSpec(concept="sentiment", split="discovery", template_family=cfg.data.template_family, seed=cfg.data.seed, n_levels=cfg.data.n_levels, n_per_level=cfg.data.n_per_level),
+        control_spec=ControlSpec(),
+        artifacts_dir=artifacts_dir,
+        adapter=args.adapter,
+        model=args.model,
+        batch_size=args.batch_size,
+        use_cache=use_cache,
+    )
+    run_controls(
+        cfg=cfg,
+        data_spec=DataSpec(concept="sentiment", split="discovery", template_family=cfg.data.template_family, seed=cfg.data.seed, n_levels=cfg.data.n_levels, n_per_level=cfg.data.n_per_level),
+        control_spec=ControlSpec(),
+        artifacts_dir=artifacts_dir,
+        adapter=args.adapter,
+        model=args.model,
+        batch_size=args.batch_size,
+        n_shuffles=20,
+        thresholds=[0.8, 0.9, 0.95],
+        early_layers=[0, 1, 2],
+        late_layers=[-3, -2, -1],
+        use_cache=use_cache,
+    )
+    # Ablation
+    samples_eval, _ = generate_samples(cfg, data_spec=DataSpec(concept="sentiment", split="eval", template_family=cfg.data.template_family, seed=cfg.data.seed, n_levels=cfg.data.n_levels, n_per_level=cfg.data.n_per_level), control=ControlSpec())
+    capture = capture_activations(
+        config=cfg,
+        data_spec=DataSpec(concept="sentiment", split="eval", template_family=cfg.data.template_family, seed=cfg.data.seed, n_levels=cfg.data.n_levels, n_per_level=cfg.data.n_per_level),
+        control_spec=ControlSpec(),
+        adapter_name=args.adapter,
+        model_name=args.model,
+        batch_size=args.batch_size,
+        artifacts_dir=artifacts_dir,
+        use_cache=use_cache,
+        local_files_only=True,
+    )
+    adapter_obj = _select_adapter(args.adapter, args.model, local_files_only=True)
+    run_ablation_pipeline(
+        adapter=adapter_obj,
+        samples=samples_eval,
+        mlp=capture.mlp,
+        residual=capture.residual,
+        layer=0,
+        m_list=[5, 10],
+        methods=["variance", "probe"],
+        seed=cfg.data.seed,
+        out_dir=artifacts_dir / "ablation" / "sentiment__eval",
+    )
+    # Specificity and behavior
+    run_specificity(
+        cfg=cfg,
+        concepts=["sentiment", "concreteness"],
+        split="discovery",
+        adapter=args.adapter,
+        model=args.model,
+        artifacts_dir=artifacts_dir,
+        use_cache=use_cache,
+    )
+    run_behavior(
+        cfg=cfg,
+        concept="sentiment",
+        adapter=args.adapter,
+        model=args.model,
+        artifacts_dir=artifacts_dir,
+        use_cache=use_cache,
+    )
+    ablation_impact_on_behavior(
+        cfg=cfg,
+        concept="sentiment",
+        adapter_name=args.adapter,
+        model=args.model,
+        layer=0,
+        m=10,
+        selection_method="variance",
+        artifacts_dir=artifacts_dir,
+        use_cache=use_cache,
+    )
+    # Concreteness geometry
+    run_geometry(
+        cfg=cfg,
+        data_spec=DataSpec(concept="concreteness", split="discovery", template_family=cfg.data.template_family, seed=cfg.data.seed, n_levels=cfg.data.n_levels, n_per_level=cfg.data.n_per_level),
+        control_spec=ControlSpec(),
+        artifacts_dir=artifacts_dir,
+        adapter=args.adapter,
+        model=args.model,
+        batch_size=args.batch_size,
+        use_cache=use_cache,
+    )
+    # Second model geometry (sentiment)
+    run_geometry(
+        cfg=cfg,
+        data_spec=DataSpec(concept="sentiment", split="discovery", template_family=cfg.data.template_family, seed=cfg.data.seed, n_levels=cfg.data.n_levels, n_per_level=cfg.data.n_per_level),
+        control_spec=ControlSpec(),
+        artifacts_dir=artifacts_dir,
+        adapter=args.second_adapter,
+        model=args.second_model,
+        batch_size=args.batch_size,
+        use_cache=use_cache,
+    )
+    _copy_paper_figures(artifacts_dir / "plots", Path(args.paper_figures))
+    manifest = runtime_metadata()
+    manifest.update({"model": args.model, "adapter": args.adapter, "second_model": args.second_model})
+    write_manifest_file(Path(args.artifacts_dir) / "manifests" / "run_all.json", manifest)
+
+
 def main() -> None:
     args = parse_args()
     if args.cmd == "capture":
@@ -267,6 +405,8 @@ def main() -> None:
         cmd_specificity(args)
     elif args.cmd == "behavior":
         cmd_behavior(args)
+    elif args.cmd == "run_all":
+        cmd_run_all(args)
 
 
 if __name__ == "__main__":

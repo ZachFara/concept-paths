@@ -1,0 +1,16 @@
+concepts:
+  sentiment: {}
+  concreteness: {}
+data:
+  concept: sentiment
+  split: discovery
+  template_family: main
+  seed: 0
+  n_levels: 2
+  n_per_level: 1
+control:
+  random_labels: false
+  unrelated_labels: false
+  control_templates: false
+hashing:
+  enable_hashing: true

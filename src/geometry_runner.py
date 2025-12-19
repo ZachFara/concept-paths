@@ -18,7 +18,7 @@ from .metrics import (
     summary_scores,
 )
 from .plots import plot_curves_with_ci, plot_main_vs_control_overlay, plot_null_histogram
-from .utils import ensure_dir, save_json
+from .utils import ensure_dir, save_json, runtime_metadata, write_manifest_file, hash_splits
 
 
 def run_geometry(
@@ -126,6 +126,9 @@ def run_geometry(
             "metadata": cache.metadata,
         },
     )
+    manifest = runtime_metadata()
+    manifest.update({"dataset_signature": dataset_sig, "split_signature": hash_splits(cfg)})
+    write_manifest_file(artifacts_dir / "manifests" / f"geometry_{data_spec.concept}_{data_spec.split}.json", manifest)
     return {
         "pc1": pc1,
         "k_curves": k_curves,
@@ -209,6 +212,9 @@ def run_controls(
         outpath=plots_dir / f"null_rot_{data_spec.concept}_{data_spec.split}.png",
         raw_out=raw_dir / f"null_rot_{data_spec.concept}_{data_spec.split}.npz",
     )
+    manifest = runtime_metadata()
+    manifest.update({"dataset_signature": dataset_sig, "split_signature": hash_splits(cfg)})
+    write_manifest_file(artifacts_dir / "manifests" / f"controls_{data_spec.concept}_{data_spec.split}.json", manifest)
     return {
         "real": {"k90": real_k, "rotation": real_r},
         "null": {"k90": null_k, "rotation": null_r},

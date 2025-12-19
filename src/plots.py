@@ -160,3 +160,51 @@ def plot_bar(
     plt.close()
     if raw_out:
         np.savez_compressed(raw_out, labels=np.array(labels), values=np.array(values))
+
+
+# Backward-compat helpers for legacy tests
+def plot_metric_by_layer(
+    *,
+    values_by_split: Mapping[str, np.ndarray],
+    title: str,
+    ylabel: str,
+    outpath: Path,
+) -> None:
+    _setup_matplotlib()
+    ensure_dir(outpath.parent)
+    plt.figure(figsize=(7.0, 4.0))
+    for split, values in values_by_split.items():
+        x = np.arange(len(values))
+        plt.plot(x, values, marker="o", linewidth=2, label=split)
+    plt.title(title)
+    plt.xlabel("Layer")
+    plt.ylabel(ylabel)
+    plt.legend(frameon=False)
+    plt.tight_layout()
+    plt.savefig(outpath)
+    plt.close()
+
+
+def plot_with_band(
+    *,
+    x: np.ndarray,
+    mean: np.ndarray,
+    std: Optional[np.ndarray],
+    label: str,
+    title: str,
+    ylabel: str,
+    outpath: Path,
+) -> None:
+    _setup_matplotlib()
+    ensure_dir(outpath.parent)
+    plt.figure(figsize=(7.0, 4.0))
+    plt.plot(x, mean, label=label, linewidth=2)
+    if std is not None:
+        plt.fill_between(x, mean - std, mean + std, alpha=0.25)
+    plt.title(title)
+    plt.xlabel("Layer")
+    plt.ylabel(ylabel)
+    plt.legend(frameon=False)
+    plt.tight_layout()
+    plt.savefig(outpath)
+    plt.close()

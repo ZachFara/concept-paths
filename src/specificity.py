@@ -13,7 +13,7 @@ from .config import ControlSpec, DataSpec, ExperimentConfig
 from .data import Sample, generate_samples, shuffle_labels_preserve_counts
 from .metrics import compute_deltas
 from .plots import plot_curves_with_ci, plot_heatmap, plot_null_histogram
-from .utils import ensure_dir, save_json
+from .utils import ensure_dir, save_json, runtime_metadata, write_manifest_file
 
 
 def concept_directions(
@@ -251,3 +251,6 @@ def run_specificity(
         stats_dir / f"transfer_{split}.json",
         {"similarity": sim["cosine"].tolist(), "transfer": mat.tolist()},
     )
+    manifest = runtime_metadata()
+    manifest.update({"concepts": concepts, "split": split})
+    write_manifest_file(artifacts_dir / "manifests" / f"specificity_{split}.json", manifest)

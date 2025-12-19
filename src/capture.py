@@ -12,7 +12,7 @@ import numpy as np
 from .adapters import GPT2Adapter, ModelAdapter, OPTAdapter
 from .config import ControlSpec, DataSpec, ExperimentConfig, load_experiment_config
 from .data import generate_samples
-from .utils import atomic_save_npz, ensure_dir, hash_splits, maybe_load_npz
+from .utils import atomic_save_npz, ensure_dir, hash_splits, maybe_load_npz, runtime_metadata, write_manifest_file
 
 
 @dataclass(frozen=True)
@@ -108,4 +108,7 @@ def capture_activations(
         mlp=capture.mlp.astype(np.float32),
         metadata=np.array([json.dumps(metadata)]),
     )
+    manifest = runtime_metadata()
+    manifest.update(metadata)
+    write_manifest_file(artifacts_dir / "manifests" / f"capture_{cache_path.stem}.json", manifest)
     return ActivationCache(residual=capture.residual, mlp=capture.mlp, metadata=metadata)

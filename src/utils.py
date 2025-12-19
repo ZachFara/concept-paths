@@ -6,6 +6,9 @@ import json
 import random
 from pathlib import Path
 from typing import Any, Optional
+import platform
+import subprocess
+import sys
 
 import numpy as np
 import torch
@@ -105,4 +108,27 @@ def build_manifest(
         "config": config_snapshot,
         "dataset_signature": dataset_signature,
         "split_signature": split_signature,
+    }
+
+
+def git_commit_hash() -> Optional[str]:
+    try:
+        out = subprocess.check_output(["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL)
+        return out.decode().strip()
+    except Exception:
+        return None
+
+
+def write_manifest_file(path: Path, data: dict[str, Any]) -> None:
+    ensure_dir(path.parent)
+    path.write_text(json.dumps(data, indent=2, sort_keys=True))
+
+
+def runtime_metadata() -> dict[str, Any]:
+    return {
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "python": sys.version,
+        "platform": platform.platform(),
+        "device": str(get_device()),
+        "git_commit": git_commit_hash(),
     }

@@ -12,7 +12,7 @@ from .config import ControlSpec, DataSpec, ExperimentConfig
 from .data import Sample, generate_samples
 from .plots import plot_curves_with_ci, plot_bar
 from .selection import select_neurons
-from .utils import ensure_dir, save_json
+from .utils import ensure_dir, save_json, runtime_metadata, write_manifest_file
 
 
 def fit_layerwise_ridge(
@@ -88,6 +88,9 @@ def run_behavior(
         artifacts_dir / "stats" / f"probe_{concept}.json",
         {"scores_eval": scores_eval.tolist(), "scores_disc": scores_disc.tolist()},
     )
+    manifest = runtime_metadata()
+    manifest.update({"concept": concept, "task": "behavior_probe"})
+    write_manifest_file(artifacts_dir / "manifests" / f"behavior_probe_{concept}.json", manifest)
 
 
 def ablation_impact_on_behavior(
@@ -166,3 +169,6 @@ def ablation_impact_on_behavior(
             "idx": idx.tolist(),
         },
     )
+    manifest = runtime_metadata()
+    manifest.update({"concept": concept, "task": "behavior_ablation", "layer": layer, "m": m})
+    write_manifest_file(artifacts_dir / "manifests" / f"behavior_ablation_{concept}.json", manifest)
