@@ -84,14 +84,28 @@ class ModelAdapter:
                     )
                 else:
                     res_layers, mlp_layers = self._capture_batch(input_ids, attn)
-            res_stack = torch.stack(res_layers, dim=1)  # [B, L, S, H]
-            mlp_stack = torch.stack(mlp_layers, dim=1)  # [B, L, S, d_mlp]
+            res_clean = []
+            for t in res_layers:
+                if t.ndim == 2:  # [B, H] -> add seq dim
+                    t = t.unsqueeze(1)
+                res_clean.append(t)
+            mlp_clean = []
+            for t in mlp_layers:
+                if t.ndim == 2:  # [B, D] -> add seq dim
+                    t = t.unsqueeze(1)
+                mlp_clean.append(t)
+
+            res_stack = torch.stack(res_clean, dim=1)  # [B, L, S, H]
+            mlp_stack = torch.stack(mlp_clean, dim=1)  # [B, L, S, d_mlp]
             bsz = input_ids.shape[0]
             # Gather last token along sequence dim
             idx = last_idx.view(bsz, 1, 1, 1)
             res_idx = idx.expand(-1, res_stack.shape[1], 1, res_stack.shape[3])
-            mlp_idx = idx.expand(-1, mlp_stack.shape[1], 1, mlp_stack.shape[3])
             res_gather = res_stack.gather(2, res_idx)
+            mlp_hidden = mlp_stack.shape[3] if mlp_stack.ndim == 4 else 1
+            if mlp_stack.ndim < 4:
+                mlp_stack = mlp_stack.unsqueeze(-1)
+            mlp_idx = idx.expand(-1, mlp_stack.shape[1], 1, mlp_hidden)
             mlp_gather = mlp_stack.gather(2, mlp_idx)
             pooled_res = res_gather.squeeze(2).detach().cpu().numpy()
             pooled_mlp = mlp_gather.squeeze(2).detach().cpu().numpy()

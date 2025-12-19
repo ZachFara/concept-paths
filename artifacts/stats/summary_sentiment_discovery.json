@@ -1,15 +1,15 @@
 {
   "dataset_signature": "877f401e747634ffd0fd56b6c3c7875f517f40515c8be34249c343e300666221",
-  "k90_expansion": 8.666666666666666,
+  "k90_expansion": 6.666666666666668,
   "metadata": {
-    "adapter": "distilbert",
+    "adapter": "opt",
     "concept": "sentiment",
     "dataset_signature": "877f401e747634ffd0fd56b6c3c7875f517f40515c8be34249c343e300666221",
-    "model_name": "distilbert-base-uncased",
+    "model_name": "facebook/opt-125m",
     "seed": 0,
     "split": "discovery",
     "split_signature": "a94d4106ac4d8f3027e2cb4a1dbea9d269b71af40cf233567ee2cb493736ca99",
     "template_family": "main"
   },
-  "rotation_decay": -13.791717529296875
+  "rotation_decay": 2.988058090209961
 }

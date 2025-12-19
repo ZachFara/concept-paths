@@ -1,9 +1,15 @@
 {
+  "adapter": "opt",
+  "concept": "sentiment",
   "dataset_signature": "877f401e747634ffd0fd56b6c3c7875f517f40515c8be34249c343e300666221",
   "device": "mps",
   "git_commit": "8ede6e560ea89eb335afb46f7376141ef25a8188",
+  "model_name": "facebook/opt-125m",
   "platform": "macOS-15.6-arm64-arm-64bit",
   "python": "3.11.4 (main, Jul  5 2023, 08:40:20) [Clang 14.0.6 ]",
+  "seed": 0,
+  "split": "discovery",
   "split_signature": "a94d4106ac4d8f3027e2cb4a1dbea9d269b71af40cf233567ee2cb493736ca99",
-  "timestamp": "2025-12-19T19:03:11.564796Z"
+  "template_family": "main",
+  "timestamp": "2025-12-19T19:01:40.085627Z"
 }
