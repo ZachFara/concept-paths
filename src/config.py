@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterable, List, Literal, Optional
 
+import yaml
+
 
 # 9 ordered sentiment levels: very negative -> very positive
 SENTIMENT_LEVELS: list[str] = [
@@ -60,6 +62,75 @@ SYNONYMS_EVAL: dict[str, list[str]] = {
     "positive": ["brilliant", "superb", "delightful"],
     "very_positive": ["exceptional", "phenomenal", "spectacular"],
 }
+
+# 9 ordered concreteness levels: very abstract -> very concrete
+CONCRETENESS_LEVELS: list[str] = [
+    "very_abstract",
+    "abstract",
+    "somewhat_abstract",
+    "slightly_abstract",
+    "neutral",
+    "slightly_concrete",
+    "somewhat_concrete",
+    "concrete",
+    "very_concrete",
+]
+
+CONCRETENESS_TEMPLATES_DISCOVERY: list[str] = [
+    "The object seemed {w}.",
+    "It was a {w} example.",
+    "The description felt {w}.",
+    "In practice, it was {w}.",
+    "The model remained {w}.",
+]
+
+CONCRETENESS_TEMPLATES_EVAL: list[str] = [
+    "The artifact looked {w}.",
+    "The case was {w}.",
+    "Overall, the instance was {w}.",
+    "In the end, it proved {w}.",
+    "The explanation stayed {w}.",
+]
+
+CONCRETENESS_SYNONYMS_DISCOVERY: dict[str, list[str]] = {
+    "very_abstract": ["conceptual", "theoretical", "notional"],
+    "abstract": ["immaterial", "nonphysical", "symbolic"],
+    "somewhat_abstract": ["figurative", "generalized", "broad"],
+    "slightly_abstract": ["vague", "hazy", "loose"],
+    "neutral": ["ordinary", "standard", "typical"],
+    "slightly_concrete": ["specific", "particular", "defined"],
+    "somewhat_concrete": ["detailed", "explicit", "clear"],
+    "concrete": ["tangible", "material", "physical"],
+    "very_concrete": ["palpable", "solid", "touchable"],
+}
+
+CONCRETENESS_SYNONYMS_EVAL: dict[str, list[str]] = {
+    "very_abstract": ["intangible", "esoteric", "metaphysical"],
+    "abstract": ["incorporeal", "mental", "cerebral"],
+    "somewhat_abstract": ["diffuse", "approximate", "generic"],
+    "slightly_abstract": ["blurred", "indistinct", "ambiguous"],
+    "neutral": ["common", "regular", "routine"],
+    "slightly_concrete": ["distinct", "precise", "exact"],
+    "somewhat_concrete": ["definite", "crisp", "direct"],
+    "concrete": ["real", "substantial", "corporeal"],
+    "very_concrete": ["graspable", "observable", "hands-on"],
+}
+
+CONTROL_TEMPLATES_DISCOVERY: list[str] = [
+    "The word was {w}.",
+    "The label read {w}.",
+    "The token looked like {w}.",
+    "The term is {w}.",
+    "It was marked {w}.",
+]
+
+CONTROL_TEMPLATES_EVAL: list[str] = [
+    "The phrase was {w}.",
+    "The tag said {w}.",
+    "The entry read {w}.",
+    "The item was {w}.",
+    "It was labeled {w}.",
+]
 
 
 @dataclass(frozen=True)
@@ -228,3 +299,148 @@ class RunConfig:
                 selectors=list(ablation_obj.get("selectors", AblationConfig().selectors)),
             ),
         )
+
+
+@dataclass(frozen=True)
+class ConceptSpec:
+    name: str
+    levels: List[str]
+    synonyms: Dict[str, Dict[str, List[str]]]
+    templates: Dict[str, Dict[str, List[str]]]
+
+    @staticmethod
+    def from_dict(
+        name: str, obj: dict, defaults: Optional["ConceptSpec"] = None
+    ) -> "ConceptSpec":
+        if defaults is None:
+            defaults = ConceptSpec(name=name, levels=[], synonyms={}, templates={})
+        return ConceptSpec(
+            name=name,
+            levels=list(obj.get("levels", defaults.levels)),
+            synonyms=dict(obj.get("synonyms", defaults.synonyms)),
+            templates=dict(obj.get("templates", defaults.templates)),
+        )
+
+
+def _default_concepts() -> Dict[str, ConceptSpec]:
+    return {
+        "sentiment": ConceptSpec(
+            name="sentiment",
+            levels=SENTIMENT_LEVELS,
+            synonyms={
+                "discovery": SYNONYMS_DISCOVERY,
+                "eval": SYNONYMS_EVAL,
+            },
+            templates={
+                "adjective_clause": {
+                    "discovery": TEMPLATES_DISCOVERY,
+                    "eval": TEMPLATES_EVAL,
+                }
+            },
+        ),
+        "concreteness": ConceptSpec(
+            name="concreteness",
+            levels=CONCRETENESS_LEVELS,
+            synonyms={
+                "discovery": CONCRETENESS_SYNONYMS_DISCOVERY,
+                "eval": CONCRETENESS_SYNONYMS_EVAL,
+            },
+            templates={
+                "descriptor_clause": {
+                    "discovery": CONCRETENESS_TEMPLATES_DISCOVERY,
+                    "eval": CONCRETENESS_TEMPLATES_EVAL,
+                }
+            },
+        ),
+    }
+
+
+@dataclass(frozen=True)
+class DataSpec:
+    concepts: Dict[str, ConceptSpec] = field(default_factory=_default_concepts)
+    split_names: List[str] = field(default_factory=lambda: ["discovery", "eval"])
+
+    @staticmethod
+    def from_dict(obj: dict) -> "DataSpec":
+        defaults = _default_concepts()
+        concepts_obj = obj.get("concepts", None)
+        if concepts_obj:
+            concepts = {}
+            for name, spec in concepts_obj.items():
+                concepts[name] = ConceptSpec.from_dict(name, spec, defaults.get(name))
+        else:
+            concepts = defaults
+        return DataSpec(
+            concepts=concepts,
+            split_names=list(obj.get("split_names", ["discovery", "eval"])),
+        )
+
+
+@dataclass(frozen=True)
+class ControlSpec:
+    neutral_template_family: str = "neutral"
+    neutral_templates: Dict[str, List[str]] = field(
+        default_factory=lambda: {
+            "discovery": CONTROL_TEMPLATES_DISCOVERY,
+            "eval": CONTROL_TEMPLATES_EVAL,
+        }
+    )
+
+    @staticmethod
+    def from_dict(obj: dict) -> "ControlSpec":
+        return ControlSpec(
+            neutral_template_family=obj.get("neutral_template_family", "neutral"),
+            neutral_templates=obj.get(
+                "neutral_templates",
+                {"discovery": CONTROL_TEMPLATES_DISCOVERY, "eval": CONTROL_TEMPLATES_EVAL},
+            ),
+        )
+
+
+@dataclass(frozen=True)
+class HashSpec:
+    algorithm: Literal["sha256"] = "sha256"
+
+    @staticmethod
+    def from_dict(obj: dict) -> "HashSpec":
+        return HashSpec(algorithm=obj.get("algorithm", "sha256"))
+
+
+@dataclass(frozen=True)
+class ModelSpec:
+    backend: Literal["nnsight", "hooks"] = "nnsight"
+    capture_site: str = "block_out"
+    pooling: str = "last"
+
+    @staticmethod
+    def from_dict(obj: dict) -> "ModelSpec":
+        return ModelSpec(
+            backend=obj.get("backend", "nnsight"),
+            capture_site=obj.get("capture_site", "block_out"),
+            pooling=obj.get("pooling", "last"),
+        )
+
+
+@dataclass(frozen=True)
+class ProjectConfig:
+    data: DataSpec = field(default_factory=DataSpec)
+    controls: ControlSpec = field(default_factory=ControlSpec)
+    hashing: HashSpec = field(default_factory=HashSpec)
+    model: ModelSpec = field(default_factory=ModelSpec)
+
+    @staticmethod
+    def from_dict(obj: dict) -> "ProjectConfig":
+        return ProjectConfig(
+            data=DataSpec.from_dict(obj.get("data", {})),
+            controls=ControlSpec.from_dict(obj.get("controls", {})),
+            hashing=HashSpec.from_dict(obj.get("hashing", {})),
+            model=ModelSpec.from_dict(obj.get("model", {})),
+        )
+
+
+def load_config(path: Optional[Path] = None) -> ProjectConfig:
+    if path is None or not path.exists():
+        return ProjectConfig()
+    with path.open() as f:
+        data = yaml.safe_load(f) or {}
+    return ProjectConfig.from_dict(data)
