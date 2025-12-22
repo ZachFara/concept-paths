@@ -221,6 +221,53 @@ def generate_samples(
     return _attach_dataset_signature(samples)
 
 
+def generate_samples_all_families(
+    concept_name: str,
+    split: Split,
+    seed: int,
+    n_per_level: int,
+    *,
+    data_spec: DataSpec | None = None,
+    control_spec: ControlSpec | None = None,
+    concept_mode: str = "sentiment",
+    aggregated_family_name: str = "aggregated-templates",
+) -> list[Sample]:
+    data_spec = data_spec or ProjectConfig().data
+    control_spec = control_spec or ProjectConfig().controls
+    concept = data_spec.concepts[concept_name]
+    all_samples: list[Sample] = []
+    for family in sorted(concept.templates.keys()):
+        fam_samples = generate_samples(
+            concept_name,
+            split,
+            family,
+            seed=seed,
+            n_per_level=n_per_level,
+            data_spec=data_spec,
+            control_spec=control_spec,
+            concept_mode=concept_mode,
+        )
+        all_samples.extend(fam_samples)
+
+    updated: list[Sample] = []
+    for s in all_samples:
+        metadata = dict(s.metadata)
+        metadata["original_template_family"] = metadata.get("template_family")
+        metadata["template_family"] = aggregated_family_name
+        updated.append(
+            Sample(
+                sample_id=s.sample_id,
+                concept_name=s.concept_name,
+                level=s.level,
+                template_id=s.template_id,
+                synonym=s.synonym,
+                prompt_text=s.prompt_text,
+                metadata=metadata,
+            )
+        )
+    return _attach_dataset_signature(updated)
+
+
 def apply_random_label_control(
     samples: Sequence[Sample],
     seed: int,

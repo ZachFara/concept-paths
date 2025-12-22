@@ -35,7 +35,7 @@ from .ablation import (
 from .utils import ensure_dir, save_json, hash_samples, get_device
 from .io import git_commit_hash, package_versions
 from .capture import build_or_load_activation_cache, dataset_from_samples, load_model_bundle
-from .data import generate_samples
+from .data import generate_samples, generate_samples_all_families
 from .metrics import (
     compute_deltas,
     compute_pca_metrics,
@@ -224,16 +224,28 @@ def cmd_geometry(args: argparse.Namespace) -> None:
     concept = args.concept
     split = args.split
     template_family = _resolve_template_family(concept, args.template_family, project_cfg)
-    samples = generate_samples(
-        concept,
-        split,
-        template_family,
-        seed=args.seed,
-        n_per_level=args.n_per_level,
-        data_spec=project_cfg.data,
-        control_spec=project_cfg.controls,
-        concept_mode=args.concept_mode,
-    )
+    if template_family == "aggregated-templates":
+        samples = generate_samples_all_families(
+            concept,
+            split,
+            seed=args.seed,
+            n_per_level=args.n_per_level,
+            data_spec=project_cfg.data,
+            control_spec=project_cfg.controls,
+            concept_mode=args.concept_mode,
+            aggregated_family_name=template_family,
+        )
+    else:
+        samples = generate_samples(
+            concept,
+            split,
+            template_family,
+            seed=args.seed,
+            n_per_level=args.n_per_level,
+            data_spec=project_cfg.data,
+            control_spec=project_cfg.controls,
+            concept_mode=args.concept_mode,
+        )
     bundle = load_model_bundle(
         args.model,
         device=torch.device(args.device) if args.device else None,
@@ -298,7 +310,7 @@ def cmd_geometry(args: argparse.Namespace) -> None:
         low=bands["pc1_low"],
         high=bands["pc1_high"],
         label="pc1",
-        title=f"PC1 variance ({concept}, {split})",
+        title=f"PC1 variance ({concept}, {split}, {template_family})",
         ylabel="Explained variance",
         outpath=plots_dir / f"{stem}_pc1.png",
     )
@@ -308,7 +320,7 @@ def cmd_geometry(args: argparse.Namespace) -> None:
         low=bands["k90_low"],
         high=bands["k90_high"],
         label="k90",
-        title=f"k90 ({concept}, {split})",
+        title=f"k90 ({concept}, {split}, {template_family})",
         ylabel="k90",
         outpath=plots_dir / f"{stem}_k90.png",
     )
@@ -319,7 +331,7 @@ def cmd_geometry(args: argparse.Namespace) -> None:
             low=bands["rotation_low"],
             high=bands["rotation_high"],
             label="rotation",
-            title=f"Rotation ({concept}, {split})",
+            title=f"Rotation ({concept}, {split}, {template_family})",
             ylabel="Rotation (deg)",
             outpath=plots_dir / f"{stem}_rotation.png",
         )
@@ -1099,6 +1111,28 @@ def cmd_run_all(args: argparse.Namespace) -> None:
                 pair_subsample_frac=None,
             )
             cmd_geometry(geom_args)
+
+            print(f"[run_all] geometry concept={concept} split=discovery templates=aggregated")
+            agg_geom_args = argparse.Namespace(
+                config=None,
+                concept=concept,
+                split="discovery",
+                template_family="aggregated-templates",
+                n_per_level=n_per_level,
+                seed=seed,
+                model=model_name,
+                batch_size=batch_size,
+                device=None,
+                use_cache=int(use_cache),
+                n_bootstrap=geom_bootstrap,
+                local_files_only=1,
+                artifacts_dir=run_dir,
+                cache_dir=cfg.artifacts_dir,
+                concept_mode="sentiment",
+                topic_pair_strategy="cartesian",
+                pair_subsample_frac=None,
+            )
+            cmd_geometry(agg_geom_args)
 
             print(f"[run_all] controls concept={concept} split=discovery")
             ctrl_args = argparse.Namespace(
