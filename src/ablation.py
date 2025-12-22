@@ -185,6 +185,7 @@ def run_ablation(
     batch_size: int = 8,
     seed: int = 0,
     artifacts_dir: Path = Path("artifacts"),
+    verbose: bool = False,
 ) -> AblationResult:
     if not samples_eval:
         raise ValueError("samples_eval required")
@@ -199,6 +200,7 @@ def run_ablation(
         pooling="last",
         capture_sites=("residual", "mlp"),
         use_cache=True,
+        verbose=verbose,
     )
 
     residual = cache.residual
@@ -238,7 +240,13 @@ def run_ablation(
 
     mlp_dims = [mlp[l].shape[1] for l in range(mlp.shape[0])]
 
-    for m in m_list:
+    if verbose:
+        from tqdm import tqdm
+
+        m_iter = tqdm(m_list, desc="ablation m_list", disable=not verbose)
+    else:
+        m_iter = m_list
+    for m in m_iter:
         idx = select_neurons(selection_method, mlp_layer, labels, m=m, seed=seed + m)
         ablated_resid = capture_residual_with_ablation(
             bundle,
@@ -378,6 +386,7 @@ def run_ablation_layer_sweep(
     batch_size: int = 8,
     seed: int = 0,
     artifacts_dir: Path = Path("artifacts"),
+    verbose: bool = False,
 ) -> Dict[str, np.ndarray]:
     bundle = load_model_bundle(model_name)
     dataset = dataset_from_samples(samples_eval)
@@ -389,6 +398,7 @@ def run_ablation_layer_sweep(
         pooling="last",
         capture_sites=("residual", "mlp"),
         use_cache=True,
+        verbose=verbose,
     )
     residual = cache.residual
     mlp = cache.mlp
@@ -399,7 +409,12 @@ def run_ablation_layer_sweep(
     n_layers = residual.shape[0]
     effects = np.zeros((n_layers,), dtype=np.float32)
 
-    for layer in range(n_layers):
+    layer_iter = range(n_layers)
+    if verbose:
+        from tqdm import tqdm
+
+        layer_iter = tqdm(layer_iter, desc="ablation layer sweep", disable=not verbose)
+    for layer in layer_iter:
         capture_layer = min(layer + 1, n_layers - 1)
         direction = _concept_direction(samples_eval, residual, layer=layer)
         mlp_layer = mlp[layer]

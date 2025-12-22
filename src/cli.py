@@ -667,6 +667,7 @@ def cmd_ablate(args: argparse.Namespace) -> None:
             batch_size=args.batch_size,
             seed=args.seed,
             artifacts_dir=Path(getattr(args, "cache_dir", artifacts_dir)),
+            verbose=bool(getattr(args, "verbose", False)),
         )
         safe_model = args.model.replace("/", "__")
         stem = f"{concept}__{split}__{template_family}__{safe_model}__Lall__{args.method}"
@@ -704,6 +705,7 @@ def cmd_ablate(args: argparse.Namespace) -> None:
         batch_size=args.batch_size,
         seed=args.seed,
         artifacts_dir=Path(getattr(args, "cache_dir", artifacts_dir)),
+        verbose=bool(getattr(args, "verbose", False)),
     )
     safe_model = args.model.replace("/", "__")
     stem = f"{concept}__{split}__{template_family}__{safe_model}__L{args.layer}__{args.method}"
@@ -1086,10 +1088,18 @@ def cmd_run_all(args: argparse.Namespace) -> None:
     ensure_dir(plots_dir)
 
     full_all_models = bool(raw.get("run_all_full_all_models", False))
-    for idx, model_name in enumerate(model_names):
+    use_verbose = bool(getattr(args, "verbose", False))
+    model_iter = model_names
+    if use_verbose:
+        model_iter = tqdm(model_names, desc="models", disable=False)
+
+    for idx, model_name in enumerate(model_iter):
         full = full_all_models or idx == 0
         print(f"[run_all] model={model_name} full={full}")
-        for concept in concepts:
+        concept_iter = concepts
+        if use_verbose:
+            concept_iter = tqdm(concepts, desc=f"concepts:{model_name}", leave=False, disable=False)
+        for concept in concept_iter:
             print(f"[run_all] geometry concept={concept} split=discovery")
             geom_args = argparse.Namespace(
                 config=None,
@@ -1109,6 +1119,7 @@ def cmd_run_all(args: argparse.Namespace) -> None:
                 concept_mode="sentiment",
                 topic_pair_strategy="cartesian",
                 pair_subsample_frac=None,
+                verbose=int(use_verbose),
             )
             cmd_geometry(geom_args)
 
@@ -1131,6 +1142,7 @@ def cmd_run_all(args: argparse.Namespace) -> None:
                 concept_mode="sentiment",
                 topic_pair_strategy="cartesian",
                 pair_subsample_frac=None,
+                verbose=int(use_verbose),
             )
             cmd_geometry(agg_geom_args)
 
@@ -1150,6 +1162,7 @@ def cmd_run_all(args: argparse.Namespace) -> None:
                 local_files_only=1,
                 artifacts_dir=run_dir,
                 cache_dir=cfg.artifacts_dir,
+                verbose=int(use_verbose),
             )
             cmd_controls(ctrl_args)
 
@@ -1168,13 +1181,14 @@ def cmd_run_all(args: argparse.Namespace) -> None:
                     use_cache=int(use_cache),
                     n_bootstrap=geom_bootstrap,
                     local_files_only=1,
-                    artifacts_dir=run_dir,
-                    cache_dir=cfg.artifacts_dir,
-                    concept_mode="topic_control",
-                    topic_pair_strategy="cartesian",
-                    pair_subsample_frac=None,
-                )
-                cmd_geometry(topic_geom_args)
+                artifacts_dir=run_dir,
+                cache_dir=cfg.artifacts_dir,
+                concept_mode="topic_control",
+                topic_pair_strategy="cartesian",
+                pair_subsample_frac=None,
+                verbose=int(use_verbose),
+            )
+            cmd_geometry(topic_geom_args)
 
                 print("[run_all] topic_control comparison split=discovery")
                 topic_ctrl_args = argparse.Namespace(
@@ -1185,17 +1199,18 @@ def cmd_run_all(args: argparse.Namespace) -> None:
                     control_template_family="topic_swap_fixed_sentiment",
                     n_per_level=n_per_level,
                     seed=seed,
-                    model=model_name,
-                    batch_size=batch_size,
-                    device=None,
-                    use_cache=int(use_cache),
-                    local_files_only=1,
-                    artifacts_dir=run_dir,
-                    cache_dir=cfg.artifacts_dir,
-                    topic_pair_strategy="cartesian",
-                    pair_subsample_frac=None,
-                )
-                cmd_topic_control(topic_ctrl_args)
+                model=model_name,
+                batch_size=batch_size,
+                device=None,
+                use_cache=int(use_cache),
+                local_files_only=1,
+                artifacts_dir=run_dir,
+                cache_dir=cfg.artifacts_dir,
+                topic_pair_strategy="cartesian",
+                pair_subsample_frac=None,
+                verbose=int(use_verbose),
+            )
+            cmd_topic_control(topic_ctrl_args)
 
             if full:
                 print(f"[run_all] ablate concept={concept} split=eval")
@@ -1209,13 +1224,14 @@ def cmd_run_all(args: argparse.Namespace) -> None:
                     batch_size=batch_size,
                     layer=int(ablation_cfg.get("layer", 2)),
                     method=ablation_cfg.get("method", "variance"),
-                    m_list=",".join(str(x) for x in ablation_cfg.get("m_list", [5, 10, 20])),
-                    alpha=0.05,
-                    random_control=1,
-                    artifacts_dir=run_dir,
-                    cache_dir=cfg.artifacts_dir,
-                )
-                cmd_ablate(ablate_args)
+                m_list=",".join(str(x) for x in ablation_cfg.get("m_list", [5, 10, 20])),
+                alpha=0.05,
+                random_control=1,
+                artifacts_dir=run_dir,
+                cache_dir=cfg.artifacts_dir,
+                verbose=int(use_verbose),
+            )
+            cmd_ablate(ablate_args)
 
                 print(f"[run_all] behavior concept={concept}")
                 behavior_args = argparse.Namespace(
@@ -1227,12 +1243,13 @@ def cmd_run_all(args: argparse.Namespace) -> None:
                     batch_size=batch_size,
                     use_cache=int(use_cache),
                     ablate_layer=int(behavior_cfg.get("ablate_layer", 2)),
-                    m=int(behavior_cfg.get("m", 20)),
-                    method=behavior_cfg.get("method", "probe_weight"),
-                    artifacts_dir=run_dir,
-                    cache_dir=cfg.artifacts_dir,
-                )
-                cmd_behavior(behavior_args)
+                m=int(behavior_cfg.get("m", 20)),
+                method=behavior_cfg.get("method", "probe_weight"),
+                artifacts_dir=run_dir,
+                cache_dir=cfg.artifacts_dir,
+                verbose=int(use_verbose),
+            )
+            cmd_behavior(behavior_args)
 
         if "sentiment" in concepts and "concreteness" in concepts:
             if full:
@@ -1252,6 +1269,7 @@ def cmd_run_all(args: argparse.Namespace) -> None:
                     method=ablation_cfg.get("method", "variance"),
                     artifacts_dir=run_dir,
                     cache_dir=cfg.artifacts_dir,
+                    verbose=int(use_verbose),
                 )
                 cmd_specificity(spec_args)
 
