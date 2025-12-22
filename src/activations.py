@@ -113,10 +113,10 @@ def capture_last_token_residuals(
                 hs = hs.transpose(0, 1)
             pooled = hs[batch_arange, last_idx]
             pooled_layers.append(pooled)
-        acts = torch.stack(pooled_layers, dim=1).detach().to("cpu", dtype=torch.float32).numpy()
+        acts = torch.stack(pooled_layers, dim=0).detach().to("cpu", dtype=torch.float32).numpy()
         outputs.append(acts)
 
-    return np.concatenate(outputs, axis=0) if outputs else np.zeros((0, len(blocks), 0))
+    return np.concatenate(outputs, axis=1) if outputs else np.zeros((len(blocks), 0, 0))
 
 
 def cache_path(artifacts_dir: Path, split: str, model: str, seed: int) -> Path:
@@ -143,8 +143,9 @@ def build_or_load_activation_cache(
         loaded = maybe_load_npz(path)
         if loaded is not None:
             loaded_keys = loaded["keys"].astype(str).tolist()
-            if loaded_keys == keys:
-                return ActivationCache(keys=loaded_keys, acts=loaded["acts"])
+            acts = loaded["acts"]
+            if loaded_keys == keys and acts.ndim == 3 and acts.shape[1] == len(keys):
+                return ActivationCache(keys=loaded_keys, acts=acts.astype(np.float32))
     acts = capture_last_token_residuals(
         lm,
         prompts,

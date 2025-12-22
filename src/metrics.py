@@ -1,19 +1,31 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Dict, Iterable, Literal, Sequence, Tuple
 
 import numpy as np
 from scipy.linalg import subspace_angles
 from sklearn.decomposition import PCA
 
-from .data import DeltaPair
+from .data import DeltaPair, Sample
 
 
 @dataclass(frozen=True)
 class PCAMetrics:
     top_pc_ratio: np.ndarray  # [n_layers]
     k90: np.ndarray  # [n_layers] int
+
+
+@dataclass(frozen=True)
+class PCACurves:
+    pc1_curve: np.ndarray  # [n_layers]
+    k_curves: Dict[str, np.ndarray]  # {"k80": [n_layers], ...}
+    subspaces: list[np.ndarray]  # per-layer [hidden, k]
+
+
+@dataclass(frozen=True)
+class RotationCurves:
+    rotation_curve: np.ndarray  # [n_layers - 1]
 
 
 def deltas_from_pairs(
@@ -25,17 +37,198 @@ def deltas_from_pairs(
     """
     Convert paired activations into Δ vectors per layer.
 
-    acts: [n_samples, n_layers, hidden]
-    returns: [n_pairs, n_layers, hidden] where Δ = h(pos) - h(neg)
+    acts: [layers, n_samples, hidden]
+    returns: [n_pairs, layers, hidden] where Δ = h(pos) - h(neg)
     """
+    if acts.ndim != 3:
+        raise ValueError(f"Expected acts with 3 dims [layers, samples, hidden], got {acts.shape}")
+    if acts.shape[1] != len(keys):
+        raise ValueError(
+            f"Expected acts.shape[1] == len(keys) ({len(keys)}), got {acts.shape}"
+        )
     key_to_row = {k: i for i, k in enumerate(keys)}
     n_pairs = len(pairs)
     if n_pairs == 0:
-        return np.zeros((0,) + acts.shape[1:], dtype=np.float32)
+        return np.zeros((0, acts.shape[0], acts.shape[2]), dtype=np.float32)
 
     neg_rows = np.array([key_to_row[p.neg_key] for p in pairs], dtype=np.int64)
     pos_rows = np.array([key_to_row[p.pos_key] for p in pairs], dtype=np.int64)
-    return (acts[pos_rows] - acts[neg_rows]).astype(np.float32)
+    deltas = (acts[:, pos_rows, :] - acts[:, neg_rows, :]).astype(np.float32)
+    return np.transpose(deltas, (1, 0, 2))
+
+
+def compute_deltas(
+    samples: Sequence[Sample],
+    residual_by_layer: np.ndarray,
+    *,
+    method: Literal["adjacent"] = "adjacent",
+) -> np.ndarray:
+    """
+    Compute Δ vectors per layer based on adjacent ordinal levels within each template.
+
+    residual_by_layer: [layers, n_samples, hidden]
+    returns: [n_pairs, n_layers, hidden]
+    """
+    if residual_by_layer.ndim != 3:
+        raise ValueError(
+            f"Expected residual_by_layer [layers, samples, hidden], got {residual_by_layer.shape}"
+        )
+    if residual_by_layer.shape[1] != len(samples):
+        raise ValueError(
+            f"Expected residual_by_layer.shape[1] == len(samples) ({len(samples)}), "
+            f"got {residual_by_layer.shape}"
+        )
+    if method != "adjacent":
+        raise ValueError(f"Unsupported method: {method}")
+
+    levels_by_template: Dict[int, Dict[int, list[int]]] = {}
+    for idx, s in enumerate(samples):
+        level_id = int(s.metadata.get("level_id", -1))
+        if level_id < 0:
+            raise ValueError("Sample metadata missing level_id")
+        levels_by_template.setdefault(s.template_id, {}).setdefault(level_id, []).append(idx)
+
+    n_layers = residual_by_layer.shape[0]
+    hidden = residual_by_layer.shape[2]
+    deltas: list[np.ndarray] = []
+
+    for template_id, by_level in levels_by_template.items():
+        level_ids = sorted(by_level.keys())
+        for neg_level_id, pos_level_id in zip(level_ids, level_ids[1:], strict=False):
+            neg_idx = by_level[neg_level_id]
+            pos_idx = by_level[pos_level_id]
+            if not neg_idx or not pos_idx:
+                continue
+            for n in neg_idx:
+                for p in pos_idx:
+                    delta = residual_by_layer[:, p, :] - residual_by_layer[:, n, :]
+                    deltas.append(delta.astype(np.float32))
+
+    if not deltas:
+        return np.zeros((0, n_layers, hidden), dtype=np.float32)
+    return np.stack(deltas, axis=0)
+
+
+def compute_pca_metrics(
+    deltas: np.ndarray,
+    *,
+    solver: Literal["full", "randomized"] = "full",
+    thresholds: Sequence[float] = (0.80, 0.90, 0.95),
+) -> PCACurves:
+    """
+    Compute PCA curves and per-layer subspaces from delta vectors.
+
+    deltas: [n_pairs, n_layers, hidden]
+    returns: pc1_curve, k_curves, subspaces per layer
+    """
+    if deltas.ndim != 3:
+        raise ValueError(f"Expected deltas [n_pairs, n_layers, hidden], got {deltas.shape}")
+
+    n_pairs, n_layers, hidden = deltas.shape
+    pc1_curve = np.zeros((n_layers,), dtype=np.float32)
+    k_curves = {f"k{int(t * 100)}": np.zeros((n_layers,), dtype=np.int64) for t in thresholds}
+    subspaces: list[np.ndarray] = []
+
+    for layer in range(n_layers):
+        x = deltas[:, layer, :]
+        if x.shape[0] < 2:
+            pc1_curve[layer] = np.nan
+            for key in k_curves:
+                k_curves[key][layer] = 0
+            subspaces.append(np.zeros((hidden, 0), dtype=np.float32))
+            continue
+
+        pca = PCA(svd_solver=solver, whiten=False)
+        pca.fit(x)
+        evr = pca.explained_variance_ratio_
+        pc1_curve[layer] = float(evr[0]) if evr.size else np.nan
+        cum = np.cumsum(evr)
+        for t in thresholds:
+            k = int(np.searchsorted(cum, t, side="left") + 1)
+            k_curves[f"k{int(t * 100)}"][layer] = min(k, evr.size)
+        k90 = int(k_curves["k90"][layer]) if "k90" in k_curves else 1
+        k90 = max(1, min(k90, evr.size))
+        subspace = pca.components_[:k90].T.astype(np.float32)
+        subspaces.append(subspace)
+
+    return PCACurves(
+        pc1_curve=pc1_curve,
+        k_curves={k: v.astype(np.int64) for k, v in k_curves.items()},
+        subspaces=subspaces,
+    )
+
+
+def compute_rotation_metrics(subspaces: Sequence[np.ndarray]) -> RotationCurves:
+    """
+    Compute mean principal-angle rotation between adjacent layer subspaces.
+    """
+    n_layers = len(subspaces)
+    if n_layers < 2:
+        return RotationCurves(rotation_curve=np.zeros((0,), dtype=np.float32))
+    rot = np.zeros((n_layers - 1,), dtype=np.float32)
+    for layer in range(n_layers - 1):
+        u_l = subspaces[layer]
+        u_lp1 = subspaces[layer + 1]
+        if u_l.size == 0 or u_lp1.size == 0:
+            rot[layer] = np.nan
+            continue
+        k = min(u_l.shape[1], u_lp1.shape[1])
+        if k < 1:
+            rot[layer] = np.nan
+            continue
+        angles = subspace_angles(u_l[:, :k], u_lp1[:, :k])
+        rot[layer] = float(np.mean(angles) * (180.0 / np.pi))
+    return RotationCurves(rotation_curve=rot)
+
+
+def bootstrap_curves(
+    samples: Sequence[Sample],
+    residual_by_layer: np.ndarray,
+    *,
+    n_bootstrap: int,
+    rng: np.random.Generator,
+    solver: Literal["full", "randomized"] = "full",
+    thresholds: Sequence[float] = (0.80, 0.90, 0.95),
+) -> Dict[str, np.ndarray]:
+    """
+    Bootstrap CI over prompts by resampling sample indices with replacement.
+    Returns percentile bands for pc1, k-curves, and rotation.
+    """
+    if n_bootstrap <= 0:
+        raise ValueError("n_bootstrap must be positive")
+    n_samples = len(samples)
+    if n_samples == 0:
+        raise ValueError("samples required for bootstrap")
+
+    pc1_stack: list[np.ndarray] = []
+    k_stack: Dict[str, list[np.ndarray]] = {f"k{int(t * 100)}": [] for t in thresholds}
+    rot_stack: list[np.ndarray] = []
+
+    for _ in range(n_bootstrap):
+        idx = rng.integers(0, n_samples, size=n_samples)
+        boot_samples = [samples[int(i)] for i in idx]
+        boot_resid = residual_by_layer[:, idx, :]
+        deltas = compute_deltas(boot_samples, boot_resid, method="adjacent")
+        pca = compute_pca_metrics(deltas, solver=solver, thresholds=thresholds)
+        rot = compute_rotation_metrics(pca.subspaces)
+        pc1_stack.append(pca.pc1_curve)
+        for key in k_stack:
+            k_stack[key].append(pca.k_curves[key].astype(np.float32))
+        rot_stack.append(rot.rotation_curve)
+
+    pc1_arr = np.stack(pc1_stack, axis=0)
+    rot_arr = np.stack(rot_stack, axis=0) if rot_stack else np.zeros((0, 0), dtype=np.float32)
+    bands = {
+        "pc1_low": np.percentile(pc1_arr, 2.5, axis=0),
+        "pc1_high": np.percentile(pc1_arr, 97.5, axis=0),
+        "rotation_low": np.percentile(rot_arr, 2.5, axis=0) if rot_arr.size else rot_arr,
+        "rotation_high": np.percentile(rot_arr, 97.5, axis=0) if rot_arr.size else rot_arr,
+    }
+    for key, stack in k_stack.items():
+        arr = np.stack(stack, axis=0)
+        bands[f"{key}_low"] = np.percentile(arr, 2.5, axis=0)
+        bands[f"{key}_high"] = np.percentile(arr, 97.5, axis=0)
+    return {k: v.astype(np.float32) for k, v in bands.items()}
 
 
 def pca_metrics_by_layer(
@@ -146,4 +339,3 @@ def rotation_by_layer(
         rot[layer] = float(np.mean(angles_deg) if metric == "mean_deg" else np.sum(angles_deg))
 
     return rot.astype(np.float32)
-

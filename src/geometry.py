@@ -24,13 +24,26 @@ def deltas_from_pairs(
     acts: np.ndarray,
     pairs: list[DeltaPair],
 ) -> np.ndarray:
+    """
+    Convert paired activations into Δ vectors per layer.
+
+    acts: [layers, n_samples, hidden]
+    returns: [n_pairs, layers, hidden] where Δ = h(pos) - h(neg)
+    """
+    if acts.ndim != 3:
+        raise ValueError(f"Expected acts with 3 dims [layers, samples, hidden], got {acts.shape}")
+    if acts.shape[1] != len(keys):
+        raise ValueError(
+            f"Expected acts.shape[1] == len(keys) ({len(keys)}), got {acts.shape}"
+        )
     key_to_row = {k: i for i, k in enumerate(keys)}
     n_pairs = len(pairs)
     if n_pairs == 0:
-        return np.zeros((0,) + acts.shape[1:], dtype=np.float32)
+        return np.zeros((0, acts.shape[0], acts.shape[2]), dtype=np.float32)
     neg_rows = np.array([key_to_row[p.neg_key] for p in pairs], dtype=np.int64)
     pos_rows = np.array([key_to_row[p.pos_key] for p in pairs], dtype=np.int64)
-    return (acts[pos_rows] - acts[neg_rows]).astype(np.float32)
+    deltas = (acts[:, pos_rows, :] - acts[:, neg_rows, :]).astype(np.float32)
+    return np.transpose(deltas, (1, 0, 2))
 
 
 def anchor_pc1(component: np.ndarray, projections: np.ndarray, ordinal: np.ndarray) -> Tuple[np.ndarray, bool]:
