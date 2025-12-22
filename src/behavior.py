@@ -80,11 +80,13 @@ def ablation_probe_impact(
     batch_size: int,
     seed: int,
     device: str | None,
+    local_files_only: bool = True,
     artifacts_dir,
 ) -> Dict[str, float]:
     bundle = load_model_bundle(
         model_name,
         device=torch.device(device) if device else None,
+        local_files_only=local_files_only,
     )
     _ensure_decoder_only(bundle.model)
     dataset = dataset_from_samples(samples_eval)

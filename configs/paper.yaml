@@ -5,6 +5,7 @@ concepts:
   - sentiment
   - concreteness
 use_cache: true
+local_files_only: false
 batch_size: 8
 n_per_level: 2
 seed: 0

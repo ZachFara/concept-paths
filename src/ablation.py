@@ -185,6 +185,7 @@ def run_ablation(
     batch_size: int = 8,
     seed: int = 0,
     device: str | None = None,
+    local_files_only: bool = True,
     artifacts_dir: Path = Path("artifacts"),
     verbose: bool = False,
 ) -> AblationResult:
@@ -194,6 +195,7 @@ def run_ablation(
     bundle = load_model_bundle(
         model_name,
         device=torch.device(device) if device else None,
+        local_files_only=local_files_only,
     )
     dataset = dataset_from_samples(samples_eval)
     cache = build_or_load_activation_cache(
@@ -390,12 +392,14 @@ def run_ablation_layer_sweep(
     batch_size: int = 8,
     seed: int = 0,
     device: str | None = None,
+    local_files_only: bool = True,
     artifacts_dir: Path = Path("artifacts"),
     verbose: bool = False,
 ) -> Dict[str, np.ndarray]:
     bundle = load_model_bundle(
         model_name,
         device=torch.device(device) if device else None,
+        local_files_only=local_files_only,
     )
     dataset = dataset_from_samples(samples_eval)
     cache = build_or_load_activation_cache(

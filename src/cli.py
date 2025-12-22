@@ -684,6 +684,7 @@ def cmd_ablate(args: argparse.Namespace) -> None:
             batch_size=args.batch_size,
             seed=args.seed,
             device=args.device,
+            local_files_only=bool(args.local_files_only),
             artifacts_dir=Path(getattr(args, "cache_dir", artifacts_dir)),
             verbose=bool(getattr(args, "verbose", False)),
         )
@@ -723,6 +724,7 @@ def cmd_ablate(args: argparse.Namespace) -> None:
         batch_size=args.batch_size,
         seed=args.seed,
         device=args.device,
+        local_files_only=bool(args.local_files_only),
         artifacts_dir=Path(getattr(args, "cache_dir", artifacts_dir)),
         verbose=bool(getattr(args, "verbose", False)),
     )
@@ -772,6 +774,7 @@ def cmd_specificity(args: argparse.Namespace) -> None:
     bundle = load_model_bundle(
         args.model,
         device=torch.device(args.device) if args.device else None,
+        local_files_only=bool(args.local_files_only),
     )
     artifacts_dir, stats_dir, plots_dir = _get_dirs(args)
     dataset_a = dataset_from_samples(samples_a)
@@ -876,6 +879,7 @@ def cmd_specificity(args: argparse.Namespace) -> None:
         seed=args.seed,
         batch_size=args.batch_size,
         device=args.device,
+        local_files_only=bool(args.local_files_only),
         artifacts_dir=Path("artifacts"),
     )
     np.savez_compressed(
@@ -986,6 +990,7 @@ def cmd_behavior(args: argparse.Namespace) -> None:
     bundle = load_model_bundle(
         args.model,
         device=torch.device(args.device) if args.device else None,
+        local_files_only=bool(args.local_files_only),
     )
     artifacts_dir, stats_dir, plots_dir = _get_dirs(args)
     dataset_d = dataset_from_samples(samples_d)
@@ -1055,6 +1060,7 @@ def cmd_behavior(args: argparse.Namespace) -> None:
         batch_size=args.batch_size,
         seed=args.seed,
         device=args.device,
+        local_files_only=bool(args.local_files_only),
         artifacts_dir=artifacts_dir,
     )
     save_json(stats_dir / f"{stem}_probe_ablation.json", impact)
@@ -1110,6 +1116,10 @@ def cmd_run_all(args: argparse.Namespace) -> None:
         use_cache = bool(args.use_cache)
     else:
         use_cache = bool(raw.get("use_cache", True))
+    if args.local_files_only is not None:
+        local_files_only = bool(args.local_files_only)
+    else:
+        local_files_only = bool(raw.get("local_files_only", True))
     batch_size = int(raw.get("batch_size", cfg.batch_size))
     n_per_level = int(raw.get("n_per_level", 2))
     seed = int(raw.get("seed", 0))
@@ -1150,7 +1160,7 @@ def cmd_run_all(args: argparse.Namespace) -> None:
                 device=device,
                 use_cache=int(use_cache),
                 n_bootstrap=geom_bootstrap,
-                local_files_only=1,
+                local_files_only=int(local_files_only),
                 artifacts_dir=run_dir,
                 cache_dir=cfg.artifacts_dir,
                 concept_mode="sentiment",
@@ -1173,7 +1183,7 @@ def cmd_run_all(args: argparse.Namespace) -> None:
                 device=device,
                 use_cache=int(use_cache),
                 n_bootstrap=geom_bootstrap,
-                local_files_only=1,
+                local_files_only=int(local_files_only),
                 artifacts_dir=run_dir,
                 cache_dir=cfg.artifacts_dir,
                 concept_mode="sentiment",
@@ -1196,7 +1206,7 @@ def cmd_run_all(args: argparse.Namespace) -> None:
                 device=device,
                 use_cache=int(use_cache),
                 n_shuffles=spec_shuffles,
-                local_files_only=1,
+                local_files_only=int(local_files_only),
                 artifacts_dir=run_dir,
                 cache_dir=cfg.artifacts_dir,
                 verbose=int(use_verbose),
@@ -1217,7 +1227,7 @@ def cmd_run_all(args: argparse.Namespace) -> None:
                     device=device,
                     use_cache=int(use_cache),
                     n_bootstrap=geom_bootstrap,
-                    local_files_only=1,
+                    local_files_only=int(local_files_only),
                     artifacts_dir=run_dir,
                     cache_dir=cfg.artifacts_dir,
                     concept_mode="topic_control",
@@ -1240,7 +1250,7 @@ def cmd_run_all(args: argparse.Namespace) -> None:
                     batch_size=batch_size,
                     device=device,
                     use_cache=int(use_cache),
-                    local_files_only=1,
+                    local_files_only=int(local_files_only),
                     artifacts_dir=run_dir,
                     cache_dir=cfg.artifacts_dir,
                     topic_pair_strategy="cartesian",
@@ -1265,6 +1275,7 @@ def cmd_run_all(args: argparse.Namespace) -> None:
                     alpha=0.05,
                     random_control=1,
                     device=device,
+                    local_files_only=int(local_files_only),
                     artifacts_dir=run_dir,
                     cache_dir=cfg.artifacts_dir,
                     verbose=int(use_verbose),
@@ -1284,6 +1295,7 @@ def cmd_run_all(args: argparse.Namespace) -> None:
                     m=int(behavior_cfg.get("m", 20)),
                     method=behavior_cfg.get("method", "probe_weight"),
                     device=device,
+                    local_files_only=int(local_files_only),
                     artifacts_dir=run_dir,
                     cache_dir=cfg.artifacts_dir,
                     verbose=int(use_verbose),
@@ -1307,6 +1319,7 @@ def cmd_run_all(args: argparse.Namespace) -> None:
                     m=int(ablation_cfg.get("m_list", [20])[0] if ablation_cfg.get("m_list") else 20),
                     method=ablation_cfg.get("method", "variance"),
                     device=device,
+                    local_files_only=int(local_files_only),
                     artifacts_dir=run_dir,
                     cache_dir=cfg.artifacts_dir,
                     verbose=int(use_verbose),
@@ -1345,6 +1358,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_all.add_argument("--backend", type=str, default="nnsight")
     run_all.add_argument("--use_cache", type=int, default=None)
     run_all.add_argument("--device", type=str, default=None)
+    run_all.add_argument("--local_files_only", type=int, default=None)
     run_all.add_argument("--verbose", type=int, default=0)
     run_all.set_defaults(func=cmd_run_all)
 
@@ -1428,6 +1442,7 @@ def build_parser() -> argparse.ArgumentParser:
     ablate.add_argument("--model", type=str, default="distilgpt2")
     ablate.add_argument("--batch_size", type=int, default=8)
     ablate.add_argument("--device", type=str, default=None)
+    ablate.add_argument("--local_files_only", type=int, default=1)
     ablate.add_argument("--layer", type=int, required=True)
     ablate.add_argument("--method", type=str, default="variance")
     ablate.add_argument("--m_list", type=str, default="5,10,20,40,80")
@@ -1445,6 +1460,7 @@ def build_parser() -> argparse.ArgumentParser:
     specificity.add_argument("--model", type=str, default="distilgpt2")
     specificity.add_argument("--batch_size", type=int, default=8)
     specificity.add_argument("--device", type=str, default=None)
+    specificity.add_argument("--local_files_only", type=int, default=1)
     specificity.add_argument("--use_cache", type=int, default=1)
     specificity.add_argument("--n_shuffles", type=int, default=50)
     specificity.add_argument("--ablate_layer", type=int, default=2)
@@ -1461,6 +1477,7 @@ def build_parser() -> argparse.ArgumentParser:
     behavior.add_argument("--model", type=str, default="distilgpt2")
     behavior.add_argument("--batch_size", type=int, default=8)
     behavior.add_argument("--device", type=str, default=None)
+    behavior.add_argument("--local_files_only", type=int, default=1)
     behavior.add_argument("--use_cache", type=int, default=1)
     behavior.add_argument("--ablate_layer", type=int, default=2)
     behavior.add_argument("--m", type=int, default=20)

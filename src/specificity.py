@@ -235,11 +235,13 @@ def cross_ablation_transfer(
     seed: int,
     batch_size: int,
     device: str | None,
+    local_files_only: bool = True,
     artifacts_dir,
 ) -> Dict[str, float]:
     bundle = load_model_bundle(
         model_name,
         device=torch.device(device) if device else None,
+        local_files_only=local_files_only,
     )
     dataset_a = dataset_from_samples(samples_a)
     dataset_b = dataset_from_samples(samples_b)
