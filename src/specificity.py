@@ -13,6 +13,7 @@ from .capture import build_or_load_activation_cache, dataset_from_samples, load_
 from .metrics import compute_deltas, compute_pca_metrics
 from .selection import select_neurons
 from .ablation import capture_residual_with_ablation
+from .stats import empirical_p_stats
 
 
 @dataclass(frozen=True)
@@ -132,8 +133,29 @@ def permutation_test_similarity(
         sim = similarity_across_concepts(perm_a, residual_a, perm_b, residual_b)
         null_cos[i] = sim.cosine
         null_ang[i] = sim.angles_deg
-    p_cos = np.mean(null_cos >= base.cosine[None, :], axis=0)
-    p_ang = np.mean(null_ang <= base.angles_deg[None, :], axis=0)
+    p_cos = np.zeros_like(base.cosine, dtype=np.float32)
+    p_ang = np.zeros_like(base.angles_deg, dtype=np.float32)
+    p_cos_hi = np.zeros_like(base.cosine, dtype=np.float32)
+    p_cos_lo = np.zeros_like(base.cosine, dtype=np.float32)
+    p_ang_hi = np.zeros_like(base.angles_deg, dtype=np.float32)
+    p_ang_lo = np.zeros_like(base.angles_deg, dtype=np.float32)
+    cos_effect = np.zeros_like(base.cosine, dtype=np.float32)
+    ang_effect = np.zeros_like(base.angles_deg, dtype=np.float32)
+    cos_z = np.zeros_like(base.cosine, dtype=np.float32)
+    ang_z = np.zeros_like(base.angles_deg, dtype=np.float32)
+    for layer in range(base.cosine.shape[0]):
+        cos_stats = empirical_p_stats(null_cos[:, layer], float(base.cosine[layer]))
+        ang_stats = empirical_p_stats(null_ang[:, layer], float(base.angles_deg[layer]))
+        p_cos[layer] = cos_stats["p_two_tailed"]
+        p_ang[layer] = ang_stats["p_two_tailed"]
+        p_cos_hi[layer] = cos_stats["p_hi"]
+        p_cos_lo[layer] = cos_stats["p_lo"]
+        p_ang_hi[layer] = ang_stats["p_hi"]
+        p_ang_lo[layer] = ang_stats["p_lo"]
+        cos_effect[layer] = cos_stats["effect_size"]
+        ang_effect[layer] = ang_stats["effect_size"]
+        cos_z[layer] = cos_stats["z_like"]
+        ang_z[layer] = ang_stats["z_like"]
     return {
         "cosine": base.cosine,
         "angles_deg": base.angles_deg,
@@ -141,6 +163,14 @@ def permutation_test_similarity(
         "null_angles_deg": null_ang,
         "p_cosine": p_cos.astype(np.float32),
         "p_angles": p_ang.astype(np.float32),
+        "p_cosine_hi": p_cos_hi.astype(np.float32),
+        "p_cosine_lo": p_cos_lo.astype(np.float32),
+        "p_angles_hi": p_ang_hi.astype(np.float32),
+        "p_angles_lo": p_ang_lo.astype(np.float32),
+        "cosine_effect_size": cos_effect.astype(np.float32),
+        "angles_effect_size": ang_effect.astype(np.float32),
+        "cosine_z_like": cos_z.astype(np.float32),
+        "angles_z_like": ang_z.astype(np.float32),
     }
 
 

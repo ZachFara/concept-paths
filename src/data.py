@@ -6,7 +6,7 @@ from typing import Any, Dict, Iterable, Literal, Sequence
 import numpy as np
 
 from .config import ControlSpec, DataSpec, ProjectConfig
-from .utils import hash_samples
+from .utils import hash_samples, stable_hash_json
 
 Split = Literal["discovery", "eval"]
 
@@ -57,6 +57,10 @@ def _get_templates(
     return list(concept.templates[template_family][split])
 
 
+def _template_has_topic(templates: Sequence[str]) -> bool:
+    return any("{topic}" in template for template in templates)
+
+
 def _validate_disjointness(
     concept_name: str,
     data_spec: DataSpec,
@@ -83,6 +87,12 @@ def _validate_disjointness(
             families["eval"],
             f"templates family {concept_name}.{template_family}",
         )
+        if _template_has_topic(families["discovery"]) or _template_has_topic(families["eval"]):
+            _assert_disjoint(
+                control_spec.topic_swap_topics["discovery"],
+                control_spec.topic_swap_topics["eval"],
+                "topics list",
+            )
 
 
 def _select_synonyms(
@@ -127,6 +137,7 @@ def generate_samples(
     *,
     data_spec: DataSpec | None = None,
     control_spec: ControlSpec | None = None,
+    concept_mode: str = "sentiment",
 ) -> list[Sample]:
     data_spec = data_spec or ProjectConfig().data
     control_spec = control_spec or ProjectConfig().controls
@@ -140,6 +151,10 @@ def generate_samples(
     concept = data_spec.concepts[concept_name]
     templates = _get_templates(concept_name, template_family, split, data_spec, control_spec)
     synonyms = concept.synonyms[split]
+    topics = None
+    if _template_has_topic(templates):
+        topics = list(control_spec.topic_swap_topics[split])
+    topics_signature = stable_hash_json(topics) if topics else None
 
     rng = np.random.default_rng(seed)
     samples: list[Sample] = []
@@ -147,27 +162,62 @@ def generate_samples(
         for level_id, level in enumerate(concept.levels):
             words = _select_synonyms(synonyms[level], n_per_level, rng)
             for word in words:
-                prompt_text = template.format(w=word)
-                sample_id = f"{concept_name}|{split}|{template_family}|{template_id}|{level}|{word}"
-                metadata: Dict[str, Any] = {
-                    "split": split,
-                    "template_family": template_family,
-                    "template": template,
-                    "seed": seed,
-                    "n_per_level": n_per_level,
-                    "level_id": level_id,
-                }
-                samples.append(
-                    Sample(
-                        sample_id=sample_id,
-                        concept_name=concept_name,
-                        level=level,
-                        template_id=template_id,
-                        synonym=word,
-                        prompt_text=prompt_text,
-                        metadata=metadata,
+                if topics:
+                    for topic_id, topic in enumerate(topics):
+                        prompt_text = template.format(w=word, topic=topic)
+                        sample_id = (
+                            f"{concept_name}|{split}|{template_family}|{template_id}|"
+                            f"{level}|{word}|{topic}"
+                        )
+                        metadata = {
+                            "split": split,
+                            "template_family": template_family,
+                            "template": template,
+                            "seed": seed,
+                            "n_per_level": n_per_level,
+                            "level_id": level_id,
+                            "topic": topic,
+                            "topic_id": topic_id,
+                            "concept_mode": concept_mode,
+                        }
+                        if topics_signature is not None:
+                            metadata["topics_signature"] = topics_signature
+                        samples.append(
+                            Sample(
+                                sample_id=sample_id,
+                                concept_name=concept_name,
+                                level=level,
+                                template_id=template_id,
+                                synonym=word,
+                                prompt_text=prompt_text,
+                                metadata=metadata,
+                            )
+                        )
+                else:
+                    prompt_text = template.format(w=word)
+                    sample_id = (
+                        f"{concept_name}|{split}|{template_family}|{template_id}|{level}|{word}"
                     )
-                )
+                    metadata = {
+                        "split": split,
+                        "template_family": template_family,
+                        "template": template,
+                        "seed": seed,
+                        "n_per_level": n_per_level,
+                        "level_id": level_id,
+                        "concept_mode": concept_mode,
+                    }
+                    samples.append(
+                        Sample(
+                            sample_id=sample_id,
+                            concept_name=concept_name,
+                            level=level,
+                            template_id=template_id,
+                            synonym=word,
+                            prompt_text=prompt_text,
+                            metadata=metadata,
+                        )
+                    )
     return _attach_dataset_signature(samples)
 
 
@@ -187,7 +237,12 @@ def apply_random_label_control(
         metadata = dict(s.metadata)
         metadata["control"] = "random_label"
         metadata["original_level"] = s.level
-        sample_id = f"{s.concept_name}|{metadata['split']}|{metadata['template_family']}|{s.template_id}|{new_level}|{s.synonym}"
+        topic = metadata.get("topic")
+        topic_suffix = f"|{topic}" if topic else ""
+        sample_id = (
+            f"{s.concept_name}|{metadata['split']}|{metadata['template_family']}|"
+            f"{s.template_id}|{new_level}|{s.synonym}{topic_suffix}"
+        )
         updated.append(
             Sample(
                 sample_id=sample_id,
@@ -233,7 +288,12 @@ def apply_unrelated_concept_control(
         metadata["control"] = "unrelated_concept"
         metadata["original_concept"] = source_concept_name
         metadata["original_level"] = s.level
-        sample_id = f"{unrelated_concept_name}|{metadata['split']}|{metadata['template_family']}|{s.template_id}|{new_level}|{s.synonym}"
+        topic = metadata.get("topic")
+        topic_suffix = f"|{topic}" if topic else ""
+        sample_id = (
+            f"{unrelated_concept_name}|{metadata['split']}|{metadata['template_family']}|"
+            f"{s.template_id}|{new_level}|{s.synonym}{topic_suffix}"
+        )
         updated.append(
             Sample(
                 sample_id=sample_id,

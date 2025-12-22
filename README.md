@@ -58,6 +58,19 @@ All runs cache intermediate results to avoid recomputation:
 
 Plots are written to `plots/`.
 
+## Concept-neutral control (topic swap)
+
+This control holds the sentiment adjective fixed and swaps the topic noun to test whether the geometry is concept-specific.
+
+```bash
+python -m src.cli geometry --concept sentiment --template_family topic_swap_fixed_sentiment --concept_mode topic_control --split discovery
+python -m src.cli topic_control --concept sentiment --template_family adjective_clause --split discovery
+```
+
+Expected artifacts:
+- `*_topic_control_angles.png` and `*_topic_control_explained.png` in `artifacts/<run_id>/plots/`
+- `*_topic_control.npz` and `*_topic_control_summary.json` in `artifacts/<run_id>/stats/`
+
 ## Device support
 
 The code will use **Apple Silicon MPS** if available, otherwise CPU.

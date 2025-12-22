@@ -62,6 +62,10 @@ def compute_deltas(
     residual_by_layer: np.ndarray,
     *,
     method: Literal["adjacent"] = "adjacent",
+    concept_mode: Literal["sentiment", "unordered", "topic_control"] = "sentiment",
+    topic_pair_strategy: Literal["cartesian", "random"] = "cartesian",
+    pair_subsample_frac: float | None = None,
+    seed: int = 0,
 ) -> np.ndarray:
     """
     Compute Δ vectors per layer based on adjacent ordinal levels within each template.
@@ -80,6 +84,15 @@ def compute_deltas(
         )
     if method != "adjacent":
         raise ValueError(f"Unsupported method: {method}")
+
+    if concept_mode == "topic_control":
+        return _compute_topic_control_deltas(
+            samples,
+            residual_by_layer,
+            strategy=topic_pair_strategy,
+            pair_subsample_frac=pair_subsample_frac,
+            seed=seed,
+        )
 
     levels_by_template: Dict[int, Dict[int, list[int]]] = {}
     for idx, s in enumerate(samples):
@@ -107,6 +120,145 @@ def compute_deltas(
     if not deltas:
         return np.zeros((0, n_layers, hidden), dtype=np.float32)
     return np.stack(deltas, axis=0)
+
+
+def build_topic_control_pairs(
+    samples: Sequence[Sample],
+    *,
+    strategy: Literal["cartesian", "random"] = "cartesian",
+    pair_subsample_frac: float | None = None,
+    seed: int = 0,
+) -> list[tuple[int, int]]:
+    if not samples:
+        return []
+    rng = np.random.default_rng(seed)
+    by_key: Dict[Tuple[int, str], list[int]] = {}
+    for idx, s in enumerate(samples):
+        topic = s.metadata.get("topic")
+        if topic is None:
+            raise ValueError("Sample metadata missing topic for topic_control")
+        by_key.setdefault((s.template_id, s.synonym), []).append(idx)
+
+    pairs: list[tuple[int, int]] = []
+    for idxs in by_key.values():
+        if len(idxs) < 2:
+            continue
+        if strategy == "cartesian":
+            for i in range(len(idxs)):
+                for j in range(i + 1, len(idxs)):
+                    pairs.append((idxs[i], idxs[j]))
+        elif strategy == "random":
+            total = len(idxs) * (len(idxs) - 1) // 2
+            target = min(total, len(idxs))
+            seen = set()
+            for _ in range(target):
+                a, b = rng.choice(idxs, size=2, replace=False)
+                key = (min(a, b), max(a, b))
+                if key in seen:
+                    continue
+                seen.add(key)
+                pairs.append(key)
+        else:
+            raise ValueError(f"Unknown topic_pair_strategy: {strategy}")
+
+    if pair_subsample_frac is not None and 0.0 < pair_subsample_frac < 1.0 and pairs:
+        k = max(1, int(len(pairs) * pair_subsample_frac))
+        idx = rng.choice(len(pairs), size=k, replace=False)
+        pairs = [pairs[int(i)] for i in idx]
+    return pairs
+
+
+def _compute_topic_control_deltas(
+    samples: Sequence[Sample],
+    residual_by_layer: np.ndarray,
+    *,
+    strategy: Literal["cartesian", "random"],
+    pair_subsample_frac: float | None,
+    seed: int,
+) -> np.ndarray:
+    pairs = build_topic_control_pairs(
+        samples,
+        strategy=strategy,
+        pair_subsample_frac=pair_subsample_frac,
+        seed=seed,
+    )
+    if not pairs:
+        return np.zeros((0, residual_by_layer.shape[0], residual_by_layer.shape[2]), dtype=np.float32)
+    deltas = []
+    for neg_idx, pos_idx in pairs:
+        delta = residual_by_layer[:, pos_idx, :] - residual_by_layer[:, neg_idx, :]
+        deltas.append(delta.astype(np.float32))
+    return np.stack(deltas, axis=0)
+
+
+def pc1_directions_from_deltas(
+    deltas: np.ndarray,
+    *,
+    solver: Literal["full", "randomized"] = "full",
+) -> np.ndarray:
+    if deltas.ndim != 3:
+        raise ValueError(f"Expected deltas [n_pairs, layers, hidden], got {deltas.shape}")
+    n_layers = deltas.shape[1]
+    hidden = deltas.shape[2]
+    out = np.zeros((n_layers, hidden), dtype=np.float32)
+    for layer in range(n_layers):
+        x = deltas[:, layer, :]
+        if x.shape[0] < 2:
+            out[layer] = np.nan
+            continue
+        pca = PCA(n_components=1, svd_solver=solver, whiten=False)
+        pca.fit(x)
+        vec = pca.components_[0].astype(np.float32)
+        norm = float(np.linalg.norm(vec))
+        out[layer] = vec / (norm + 1e-12)
+    return out
+
+
+def angle_between_directions(u: np.ndarray, v: np.ndarray) -> np.ndarray:
+    if u.shape != v.shape:
+        raise ValueError(f"Expected matching shapes for directions, got {u.shape} vs {v.shape}")
+    n_layers = u.shape[0]
+    angles = np.zeros((n_layers,), dtype=np.float32)
+    for layer in range(n_layers):
+        a = u[layer]
+        b = v[layer]
+        if np.any(np.isnan(a)) or np.any(np.isnan(b)):
+            angles[layer] = np.nan
+            continue
+        denom = float(np.linalg.norm(a) * np.linalg.norm(b))
+        if denom == 0.0:
+            angles[layer] = np.nan
+            continue
+        cos = float(np.dot(a, b) / denom)
+        cos = max(-1.0, min(1.0, abs(cos)))
+        angles[layer] = float(np.degrees(np.arccos(cos)))
+    return angles
+
+
+def explained_fraction_along_direction(
+    deltas: np.ndarray,
+    direction: np.ndarray,
+) -> np.ndarray:
+    if deltas.ndim != 3:
+        raise ValueError(f"Expected deltas [n_pairs, layers, hidden], got {deltas.shape}")
+    if direction.ndim != 2:
+        raise ValueError(f"Expected direction [layers, hidden], got {direction.shape}")
+    if deltas.shape[1] != direction.shape[0] or deltas.shape[2] != direction.shape[1]:
+        raise ValueError(
+            f"Mismatched shapes deltas {deltas.shape} vs direction {direction.shape}"
+        )
+    n_layers = deltas.shape[1]
+    out = np.zeros((n_layers,), dtype=np.float32)
+    for layer in range(n_layers):
+        x = deltas[:, layer, :]
+        if x.shape[0] < 2:
+            out[layer] = np.nan
+            continue
+        proj = x @ direction[layer]
+        var_proj = float(np.var(proj, ddof=1))
+        var_total = float(np.sum(np.var(x, axis=0, ddof=1)))
+        out[layer] = float(var_proj / (var_total + 1e-12))
+    return out
 
 
 def compute_pca_metrics(

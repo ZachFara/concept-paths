@@ -322,7 +322,9 @@ def dataset_from_samples(samples: Sequence[Any]) -> CaptureDataset:
     control_flags = {
         k: v
         for k, v in metadata.items()
-        if k == "control" or k.startswith("original_")
+        if k == "control"
+        or k.startswith("original_")
+        or k in {"concept_mode", "topics_signature"}
     }
     dataset_signature = metadata.get("dataset_signature")
     keys = [getattr(s, "sample_id", "") for s in samples]

@@ -37,6 +37,22 @@ TEMPLATES_EVAL: list[str] = [
     "From my view, the interaction felt {w}.",
 ]
 
+TOPIC_SWAP_TEMPLATES_DISCOVERY: list[str] = [
+    "Overall, the {topic} was {w}.",
+    "In summary, the {topic} feels {w}.",
+    "To be honest, the {topic} was {w}.",
+    "All in all, the {topic} was {w}.",
+    "From my view, the {topic} was {w}.",
+]
+
+TOPIC_SWAP_TEMPLATES_EVAL: list[str] = [
+    "In retrospect, the {topic} seemed {w}.",
+    "From my perspective, the {topic} felt {w}.",
+    "Net-net, the {topic} proved {w}.",
+    "By the end, the {topic} was {w}.",
+    "If I'm honest, the {topic} came across {w}.",
+]
+
 # Synonyms are split into disjoint discovery vs eval sets (never mix them).
 # Keep 3–6 adjectives per level for each split.
 SYNONYMS_DISCOVERY: dict[str, list[str]] = {
@@ -132,6 +148,22 @@ CONTROL_TEMPLATES_EVAL: list[str] = [
     "It was labeled {w}.",
 ]
 
+TOPIC_SWAP_TOPICS_DISCOVERY: list[str] = [
+    "trip",
+    "meal",
+    "lecture",
+    "app",
+    "service",
+]
+
+TOPIC_SWAP_TOPICS_EVAL: list[str] = [
+    "movie",
+    "product",
+    "event",
+    "interaction",
+    "interface",
+]
+
 
 @dataclass(frozen=True)
 class StimuliFamily:
@@ -203,7 +235,7 @@ class GeometryConfig:
     rotation_k_fixed: int = 5
     rotation_metric: Literal["mean_deg", "sum_deg"] = "mean_deg"
     permute_labels: bool = False
-    concept_mode: Literal["sentiment", "unordered"] = "sentiment"
+    concept_mode: Literal["sentiment", "unordered", "topic_control"] = "sentiment"
     pair_subsample_frac: Optional[float] = None
     random_baseline_directions: int = 10
     random_baseline_subspaces: int = 5
@@ -335,7 +367,11 @@ def _default_concepts() -> Dict[str, ConceptSpec]:
                 "adjective_clause": {
                     "discovery": TEMPLATES_DISCOVERY,
                     "eval": TEMPLATES_EVAL,
-                }
+                },
+                "topic_swap_fixed_sentiment": {
+                    "discovery": TOPIC_SWAP_TEMPLATES_DISCOVERY,
+                    "eval": TOPIC_SWAP_TEMPLATES_EVAL,
+                },
             },
         ),
         "concreteness": ConceptSpec(
@@ -385,6 +421,12 @@ class ControlSpec:
             "eval": CONTROL_TEMPLATES_EVAL,
         }
     )
+    topic_swap_topics: Dict[str, List[str]] = field(
+        default_factory=lambda: {
+            "discovery": TOPIC_SWAP_TOPICS_DISCOVERY,
+            "eval": TOPIC_SWAP_TOPICS_EVAL,
+        }
+    )
 
     @staticmethod
     def from_dict(obj: dict) -> "ControlSpec":
@@ -393,6 +435,10 @@ class ControlSpec:
             neutral_templates=obj.get(
                 "neutral_templates",
                 {"discovery": CONTROL_TEMPLATES_DISCOVERY, "eval": CONTROL_TEMPLATES_EVAL},
+            ),
+            topic_swap_topics=obj.get(
+                "topic_swap_topics",
+                {"discovery": TOPIC_SWAP_TOPICS_DISCOVERY, "eval": TOPIC_SWAP_TOPICS_EVAL},
             ),
         )
 

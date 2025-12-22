@@ -16,6 +16,7 @@ from .experiments.pipeline import run_ablation as run_ablation_legacy, run_geome
 from .io import ensure_run_dir, save_config_snapshot, write_manifest, write_run_metadata
 from .plots import plot_metric_by_layer, plot_with_band
 from .plotting import plot_curve_with_ci, plot_null_hist, plot_heatmap, plot_bar
+from .stats import empirical_p_stats
 from .specificity import (
     similarity_across_concepts,
     permutation_test_similarity,
@@ -40,6 +41,9 @@ from .metrics import (
     compute_pca_metrics,
     compute_rotation_metrics,
     bootstrap_curves,
+    pc1_directions_from_deltas,
+    angle_between_directions,
+    explained_fraction_along_direction,
 )
 
 
@@ -228,6 +232,7 @@ def cmd_geometry(args: argparse.Namespace) -> None:
         n_per_level=args.n_per_level,
         data_spec=project_cfg.data,
         control_spec=project_cfg.controls,
+        concept_mode=args.concept_mode,
     )
     bundle = load_model_bundle(
         args.model,
@@ -247,7 +252,15 @@ def cmd_geometry(args: argparse.Namespace) -> None:
         use_cache=bool(args.use_cache),
     )
     residual = cache.residual
-    deltas = compute_deltas(samples, residual, method="adjacent")
+    deltas = compute_deltas(
+        samples,
+        residual,
+        method="adjacent",
+        concept_mode=args.concept_mode,
+        topic_pair_strategy=args.topic_pair_strategy,
+        pair_subsample_frac=args.pair_subsample_frac,
+        seed=args.seed,
+    )
     pca = compute_pca_metrics(deltas)
     rot = compute_rotation_metrics(pca.subspaces)
 
@@ -409,8 +422,8 @@ def cmd_controls(args: argparse.Namespace) -> None:
         null_pc1[i] = float(np.nanmean(pca.pc1_curve))
         null_rot[i] = float(np.nanmean(rot.rotation_curve))
 
-    p_pc1 = float(np.mean(null_pc1 >= observed_pc1_mean))
-    p_rot = float(np.mean(null_rot >= observed_rot_mean))
+    pc1_stats = empirical_p_stats(null_pc1, observed_pc1_mean)
+    rot_stats = empirical_p_stats(null_rot, observed_rot_mean)
 
     safe_model = args.model.replace("/", "__")
     stem = f"{concept}__{split}__{template_family}__{safe_model}"
@@ -423,19 +436,40 @@ def cmd_controls(args: argparse.Namespace) -> None:
     )
     save_json(
         stats_dir / f"{stem}_pvalues.json",
-        {"pc1_mean": p_pc1, "rotation_mean": p_rot},
+        {
+            "pc1_mean": pc1_stats["p_two_tailed"],
+            "rotation_mean": rot_stats["p_two_tailed"],
+            "pc1_mean_p_two_tailed": pc1_stats["p_two_tailed"],
+            "pc1_mean_p_hi": pc1_stats["p_hi"],
+            "pc1_mean_p_lo": pc1_stats["p_lo"],
+            "pc1_mean_effect_size": pc1_stats["effect_size"],
+            "pc1_mean_z_like": pc1_stats["z_like"],
+            "rotation_mean_p_two_tailed": rot_stats["p_two_tailed"],
+            "rotation_mean_p_hi": rot_stats["p_hi"],
+            "rotation_mean_p_lo": rot_stats["p_lo"],
+            "rotation_mean_effect_size": rot_stats["effect_size"],
+            "rotation_mean_z_like": rot_stats["z_like"],
+        },
     )
     plot_null_hist(
         values=null_pc1,
         observed=observed_pc1_mean,
-        title=f"PC1 mean null ({concept}, {split})",
+        title=(
+            f"PC1 mean null ({concept}, {split}) "
+            f"p={pc1_stats['p_two_tailed']:.3f} "
+            f"eff={pc1_stats['effect_size']:.3f}"
+        ),
         xlabel="PC1 mean",
         outpath=plots_dir / f"{stem}_null_pc1.png",
     )
     plot_null_hist(
         values=null_rot,
         observed=observed_rot_mean,
-        title=f"Rotation mean null ({concept}, {split})",
+        title=(
+            f"Rotation mean null ({concept}, {split}) "
+            f"p={rot_stats['p_two_tailed']:.3f} "
+            f"eff={rot_stats['effect_size']:.3f}"
+        ),
         xlabel="Rotation mean (deg)",
         outpath=plots_dir / f"{stem}_null_rotation.png",
     )
@@ -448,6 +482,150 @@ def cmd_controls(args: argparse.Namespace) -> None:
         split_signature=hash_samples(samples),
         cache_key=cache.metadata.get("cache_key"),
         extra={"command": "controls", "concept": concept, "split": split},
+    )
+
+
+def cmd_topic_control(args: argparse.Namespace) -> None:
+    project_cfg = cfgmod.load_config(Path(args.config)) if args.config else cfgmod.ProjectConfig()
+    concept = args.concept
+    split = args.split
+    template_family = _resolve_template_family(concept, args.template_family, project_cfg)
+    control_family = args.control_template_family
+    if concept != "sentiment":
+        raise ValueError("topic_control is only implemented for sentiment concept")
+
+    samples_sent = generate_samples(
+        concept,
+        split,
+        template_family,
+        seed=args.seed,
+        n_per_level=args.n_per_level,
+        data_spec=project_cfg.data,
+        control_spec=project_cfg.controls,
+        concept_mode="sentiment",
+    )
+    samples_ctrl = generate_samples(
+        concept,
+        split,
+        control_family,
+        seed=args.seed,
+        n_per_level=args.n_per_level,
+        data_spec=project_cfg.data,
+        control_spec=project_cfg.controls,
+        concept_mode="topic_control",
+    )
+
+    bundle = load_model_bundle(
+        args.model,
+        device=torch.device(args.device) if args.device else None,
+        local_files_only=bool(args.local_files_only),
+    )
+    artifacts_dir, stats_dir, plots_dir = _get_dirs(args)
+    cache_dir = Path(getattr(args, "cache_dir", artifacts_dir))
+
+    dataset_sent = dataset_from_samples(samples_sent)
+    dataset_ctrl = dataset_from_samples(samples_ctrl)
+    cache_sent = build_or_load_activation_cache(
+        bundle,
+        dataset=dataset_sent,
+        artifacts_dir=cache_dir,
+        batch_size=args.batch_size,
+        pooling="last",
+        capture_sites=("residual", "mlp"),
+        use_cache=bool(args.use_cache),
+    )
+    cache_ctrl = build_or_load_activation_cache(
+        bundle,
+        dataset=dataset_ctrl,
+        artifacts_dir=cache_dir,
+        batch_size=args.batch_size,
+        pooling="last",
+        capture_sites=("residual", "mlp"),
+        use_cache=bool(args.use_cache),
+    )
+
+    deltas_sent = compute_deltas(
+        samples_sent,
+        cache_sent.residual,
+        method="adjacent",
+        concept_mode="sentiment",
+        seed=args.seed,
+    )
+    deltas_ctrl = compute_deltas(
+        samples_ctrl,
+        cache_ctrl.residual,
+        method="adjacent",
+        concept_mode="topic_control",
+        topic_pair_strategy=args.topic_pair_strategy,
+        pair_subsample_frac=args.pair_subsample_frac,
+        seed=args.seed,
+    )
+
+    dirs_sent = pc1_directions_from_deltas(deltas_sent)
+    dirs_ctrl = pc1_directions_from_deltas(deltas_ctrl)
+    angles = angle_between_directions(dirs_sent, dirs_ctrl)
+    explained_frac = explained_fraction_along_direction(deltas_ctrl, dirs_sent)
+
+    safe_model = args.model.replace("/", "__")
+    stem = f"{concept}__{split}__{control_family}__{safe_model}"
+    np.savez_compressed(
+        stats_dir / f"{stem}_topic_control.npz",
+        angles_deg=angles,
+        explained_frac_control=explained_frac,
+    )
+    _save_curves_csv(
+        stats_dir / f"{stem}_topic_control.csv",
+        curves={
+            "angles_deg": angles,
+            "explained_frac_control": explained_frac,
+        },
+    )
+    save_json(
+        stats_dir / f"{stem}_topic_control_summary.json",
+        {
+            "mean_angle_deg": float(np.nanmean(angles)),
+            "mean_explained_frac_control": float(np.nanmean(explained_frac)),
+            "control_template_family": control_family,
+            "sentiment_template_family": template_family,
+        },
+    )
+
+    layers = np.arange(len(angles))
+    plot_curve_with_ci(
+        x=layers,
+        mean=angles,
+        low=None,
+        high=None,
+        label="angle",
+        title=f"Angle: sentiment vs topic-control ({concept}, {split})",
+        ylabel="Angle (deg)",
+        outpath=plots_dir / f"{stem}_topic_control_angles.png",
+    )
+    plot_curve_with_ci(
+        x=layers,
+        mean=explained_frac,
+        low=None,
+        high=None,
+        label="explained",
+        title=f"Control projection on sentiment PC1 ({concept}, {split})",
+        ylabel="Explained fraction",
+        outpath=plots_dir / f"{stem}_topic_control_explained.png",
+    )
+
+    _write_manifest(
+        out_dir=stats_dir,
+        name=f"{stem}_topic_control",
+        model_name=args.model,
+        device=str(bundle.device),
+        dataset_signature=dataset_ctrl.dataset_signature,
+        split_signature=hash_samples(samples_ctrl),
+        cache_key=cache_ctrl.metadata.get("cache_key"),
+        extra={
+            "command": "topic_control",
+            "concept": concept,
+            "split": split,
+            "control_template_family": control_family,
+        },
     )
 
 
@@ -604,6 +782,14 @@ def cmd_specificity(args: argparse.Namespace) -> None:
         null_angles_deg=perm["null_angles_deg"],
         p_cosine=perm["p_cosine"],
         p_angles=perm["p_angles"],
+        p_cosine_hi=perm["p_cosine_hi"],
+        p_cosine_lo=perm["p_cosine_lo"],
+        p_angles_hi=perm["p_angles_hi"],
+        p_angles_lo=perm["p_angles_lo"],
+        cosine_effect_size=perm["cosine_effect_size"],
+        angles_effect_size=perm["angles_effect_size"],
+        cosine_z_like=perm["cosine_z_like"],
+        angles_z_like=perm["angles_z_like"],
     )
 
     layers = np.arange(len(sim.cosine))
@@ -908,6 +1094,9 @@ def cmd_run_all(args: argparse.Namespace) -> None:
                 local_files_only=1,
                 artifacts_dir=run_dir,
                 cache_dir=cfg.artifacts_dir,
+                concept_mode="sentiment",
+                topic_pair_strategy="cartesian",
+                pair_subsample_frac=None,
             )
             cmd_geometry(geom_args)
 
@@ -929,6 +1118,50 @@ def cmd_run_all(args: argparse.Namespace) -> None:
                 cache_dir=cfg.artifacts_dir,
             )
             cmd_controls(ctrl_args)
+
+            if full and concept == "sentiment":
+                print("[run_all] geometry topic_control split=discovery")
+                topic_geom_args = argparse.Namespace(
+                    config=None,
+                    concept=concept,
+                    split="discovery",
+                    template_family="topic_swap_fixed_sentiment",
+                    n_per_level=n_per_level,
+                    seed=seed,
+                    model=model_name,
+                    batch_size=batch_size,
+                    device=None,
+                    use_cache=int(use_cache),
+                    n_bootstrap=geom_bootstrap,
+                    local_files_only=1,
+                    artifacts_dir=run_dir,
+                    cache_dir=cfg.artifacts_dir,
+                    concept_mode="topic_control",
+                    topic_pair_strategy="cartesian",
+                    pair_subsample_frac=None,
+                )
+                cmd_geometry(topic_geom_args)
+
+                print("[run_all] topic_control comparison split=discovery")
+                topic_ctrl_args = argparse.Namespace(
+                    config=None,
+                    concept=concept,
+                    split="discovery",
+                    template_family="adjective_clause",
+                    control_template_family="topic_swap_fixed_sentiment",
+                    n_per_level=n_per_level,
+                    seed=seed,
+                    model=model_name,
+                    batch_size=batch_size,
+                    device=None,
+                    use_cache=int(use_cache),
+                    local_files_only=1,
+                    artifacts_dir=run_dir,
+                    cache_dir=cfg.artifacts_dir,
+                    topic_pair_strategy="cartesian",
+                    pair_subsample_frac=None,
+                )
+                cmd_topic_control(topic_ctrl_args)
 
             if full:
                 print(f"[run_all] ablate concept={concept} split=eval")
@@ -1034,6 +1267,19 @@ def build_parser() -> argparse.ArgumentParser:
     geometry.add_argument("--use_cache", type=int, default=1)
     geometry.add_argument("--n_bootstrap", type=int, default=200)
     geometry.add_argument("--local_files_only", type=int, default=1)
+    geometry.add_argument(
+        "--concept_mode",
+        type=str,
+        default="sentiment",
+        choices=["sentiment", "unordered", "topic_control"],
+    )
+    geometry.add_argument(
+        "--topic_pair_strategy",
+        type=str,
+        default="cartesian",
+        choices=["cartesian", "random"],
+    )
+    geometry.add_argument("--pair_subsample_frac", type=float, default=None)
     geometry.set_defaults(func=cmd_geometry)
 
     controls = sub.add_parser("controls", help="Permutation controls with null distributions")
@@ -1050,6 +1296,31 @@ def build_parser() -> argparse.ArgumentParser:
     controls.add_argument("--n_shuffles", type=int, default=50)
     controls.add_argument("--local_files_only", type=int, default=1)
     controls.set_defaults(func=cmd_controls)
+
+    topic_control = sub.add_parser(
+        "topic_control",
+        help="Concept-neutral topic-swap control (fixed adjective, varied topic)",
+    )
+    topic_control.add_argument("--config", type=str, default=None, help="Path to YAML config")
+    topic_control.add_argument("--concept", type=str, default="sentiment")
+    topic_control.add_argument("--split", type=str, default="discovery")
+    topic_control.add_argument("--template_family", type=str, default=None)
+    topic_control.add_argument("--control_template_family", type=str, default="topic_swap_fixed_sentiment")
+    topic_control.add_argument("--n_per_level", type=int, default=2)
+    topic_control.add_argument("--seed", type=int, default=0)
+    topic_control.add_argument("--model", type=str, default="distilgpt2")
+    topic_control.add_argument("--batch_size", type=int, default=16)
+    topic_control.add_argument("--device", type=str, default=None)
+    topic_control.add_argument("--use_cache", type=int, default=1)
+    topic_control.add_argument("--local_files_only", type=int, default=1)
+    topic_control.add_argument(
+        "--topic_pair_strategy",
+        type=str,
+        default="cartesian",
+        choices=["cartesian", "random"],
+    )
+    topic_control.add_argument("--pair_subsample_frac", type=float, default=None)
+    topic_control.set_defaults(func=cmd_topic_control)
 
     ablate = sub.add_parser("ablate", help="Run ablation pipeline")
     ablate.add_argument("--concept", type=str, default="sentiment")
