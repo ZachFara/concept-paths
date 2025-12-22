@@ -10,10 +10,16 @@ import torch
 import yaml
 
 from . import config as cfgmod
-from .experiments.pipeline import run_ablation, run_geometry
+from .experiments.pipeline import run_ablation as run_ablation_legacy, run_geometry
 from .io import ensure_run_dir, save_config_snapshot, write_manifest, write_run_metadata
 from .plots import plot_metric_by_layer, plot_with_band
 from .plotting import plot_curve_with_ci, plot_null_hist
+from .ablation import (
+    run_ablation as run_ablation_stage4,
+    run_ablation_layer_sweep,
+    save_ablation_artifacts,
+    plot_ablation_curves,
+)
 from .utils import ensure_dir, save_json
 from .capture import build_or_load_activation_cache, dataset_from_samples, load_model_bundle
 from .data import generate_samples
@@ -348,6 +354,73 @@ def cmd_controls(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_ablate(args: argparse.Namespace) -> None:
+    project_cfg = cfgmod.ProjectConfig()
+    concept = args.concept
+    split = args.split
+    template_family = _resolve_template_family(concept, args.template_family, project_cfg)
+    samples = generate_samples(
+        concept,
+        split,
+        template_family,
+        seed=args.seed,
+        n_per_level=args.n_per_level,
+        data_spec=project_cfg.data,
+        control_spec=project_cfg.controls,
+    )
+    m_list = [int(x) for x in args.m_list.split(",") if x.strip()]
+    if args.layer < 0:
+        sweep = run_ablation_layer_sweep(
+            samples,
+            model_name=args.model,
+            selection_method=args.method,
+            m=m_list[0],
+            alpha=args.alpha,
+            batch_size=args.batch_size,
+            seed=args.seed,
+            artifacts_dir=Path("artifacts"),
+        )
+        plots_dir = Path("artifacts") / "plots"
+        stats_dir = Path("artifacts") / "stats"
+        ensure_dir(plots_dir)
+        ensure_dir(stats_dir)
+        safe_model = args.model.replace("/", "__")
+        stem = f"{concept}__{split}__{template_family}__{safe_model}__Lall__{args.method}"
+        np.savez_compressed(stats_dir / f"{stem}_layer_sweep.npz", **sweep)
+        plot_curve_with_ci(
+            x=np.arange(len(sweep["layer_effects"])),
+            mean=sweep["layer_effects"],
+            low=None,
+            high=None,
+            label="effect",
+            title="Ablation effect vs layer",
+            ylabel="Projection delta",
+            outpath=plots_dir / f"{stem}_effect_vs_layer.png",
+        )
+        return
+
+    result = run_ablation_stage4(
+        samples,
+        model_name=args.model,
+        selection_method=args.method,
+        layer=args.layer,
+        m_list=m_list,
+        alpha=args.alpha,
+        random_control=bool(args.random_control),
+        batch_size=args.batch_size,
+        seed=args.seed,
+        artifacts_dir=Path("artifacts"),
+    )
+    plots_dir = Path("artifacts") / "plots"
+    stats_dir = Path("artifacts") / "stats"
+    ensure_dir(plots_dir)
+    ensure_dir(stats_dir)
+    safe_model = args.model.replace("/", "__")
+    stem = f"{concept}__{split}__{template_family}__{safe_model}__L{args.layer}__{args.method}"
+    save_ablation_artifacts(result, out_dir=stats_dir, stem=stem)
+    plot_ablation_curves(result, out_dir=plots_dir, stem=stem)
+
+
 def cmd_run_all(args: argparse.Namespace) -> None:
     cfg = load_config(Path(args.config) if args.config else None)
     run_dir = ensure_run_dir(cfg.artifacts_dir, cfg.run_id)
@@ -372,7 +445,7 @@ def cmd_run_all(args: argparse.Namespace) -> None:
     ablation_results = {}
     for seed in cfg.seeds:
         for selector in cfg.ablation.selectors:
-            res = run_ablation(cfg, run_dir=ablation_dir, selector=selector, seed=seed)
+            res = run_ablation_legacy(cfg, run_dir=ablation_dir, selector=selector, seed=seed)
             ablation_results[f"{selector}_seed{seed}"] = {k: v.tolist() for k, v in res.items()}
     write_manifest(ablation_dir / "ablation_results.json", ablation_results)
 
@@ -425,6 +498,21 @@ def build_parser() -> argparse.ArgumentParser:
     controls.add_argument("--n_shuffles", type=int, default=50)
     controls.add_argument("--local_files_only", type=int, default=1)
     controls.set_defaults(func=cmd_controls)
+
+    ablate = sub.add_parser("ablate", help="Run ablation pipeline")
+    ablate.add_argument("--concept", type=str, default="sentiment")
+    ablate.add_argument("--split", type=str, default="eval")
+    ablate.add_argument("--template_family", type=str, default=None)
+    ablate.add_argument("--n_per_level", type=int, default=2)
+    ablate.add_argument("--seed", type=int, default=0)
+    ablate.add_argument("--model", type=str, default="distilgpt2")
+    ablate.add_argument("--batch_size", type=int, default=8)
+    ablate.add_argument("--layer", type=int, required=True)
+    ablate.add_argument("--method", type=str, default="variance")
+    ablate.add_argument("--m_list", type=str, default="5,10,20,40,80")
+    ablate.add_argument("--alpha", type=float, default=0.05)
+    ablate.add_argument("--random_control", type=int, default=1)
+    ablate.set_defaults(func=cmd_ablate)
     return p
 
 
