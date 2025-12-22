@@ -1,0 +1,22 @@
+model_names:
+  - gpt2
+  - facebook/opt-125m
+concepts:
+  - sentiment
+  - concreteness
+use_cache: true
+batch_size: 8
+n_per_level: 2
+seed: 0
+ablation:
+  layer: 2
+  method: variance
+  m_list: [5, 10, 20]
+behavior:
+  ablate_layer: 2
+  m: 20
+  method: probe_weight
+specificity:
+  n_shuffles: 50
+geometry:
+  n_bootstrap: 200

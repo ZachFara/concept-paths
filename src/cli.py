@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Sequence
 
@@ -13,14 +15,24 @@ from . import config as cfgmod
 from .experiments.pipeline import run_ablation as run_ablation_legacy, run_geometry
 from .io import ensure_run_dir, save_config_snapshot, write_manifest, write_run_metadata
 from .plots import plot_metric_by_layer, plot_with_band
-from .plotting import plot_curve_with_ci, plot_null_hist
+from .plotting import plot_curve_with_ci, plot_null_hist, plot_heatmap, plot_bar
+from .specificity import (
+    similarity_across_concepts,
+    permutation_test_similarity,
+    transfer_direction,
+    shared_variance_control,
+    pc1_directions_from_samples,
+    cross_ablation_transfer,
+)
+from .behavior import train_ridge_probes, eval_ridge_probes, ablation_probe_impact
 from .ablation import (
     run_ablation as run_ablation_stage4,
     run_ablation_layer_sweep,
     save_ablation_artifacts,
     plot_ablation_curves,
 )
-from .utils import ensure_dir, save_json
+from .utils import ensure_dir, save_json, hash_samples, get_device
+from .io import git_commit_hash, package_versions
 from .capture import build_or_load_activation_cache, dataset_from_samples, load_model_bundle
 from .data import generate_samples
 from .metrics import (
@@ -134,6 +146,75 @@ def _save_curves_csv(path: Path, *, curves: Dict[str, np.ndarray]) -> None:
     path.write_text("\n".join(rows))
 
 
+def _get_dirs(args: argparse.Namespace) -> tuple[Path, Path, Path]:
+    artifacts_dir = Path(getattr(args, "artifacts_dir", "artifacts"))
+    stats_dir = artifacts_dir / "stats"
+    plots_dir = artifacts_dir / "plots"
+    ensure_dir(stats_dir)
+    ensure_dir(plots_dir)
+    return artifacts_dir, stats_dir, plots_dir
+
+
+def _write_manifest(
+    *,
+    out_dir: Path,
+    name: str,
+    model_name: str,
+    device: str,
+    dataset_signature: str | None,
+    split_signature: str | None,
+    cache_key: dict | None,
+    extra: dict | None = None,
+) -> None:
+    try:
+        import nnsight
+
+        nnsight_version = getattr(nnsight, "__version__", "unknown")
+    except Exception:
+        nnsight_version = "not_installed"
+    manifest = {
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "git_commit": git_commit_hash(),
+        "python": sys.version,
+        "device": device,
+        "model_id": model_name,
+        "backend": "nnsight",
+        "nnsight_version": nnsight_version,
+        "dataset_signature": dataset_signature,
+        "split_signature": split_signature,
+        "cache_key": cache_key,
+        "packages": package_versions(),
+    }
+    if extra:
+        manifest.update(extra)
+    save_json(out_dir / f"{name}_manifest.json", manifest)
+
+
+def _export_paper_figures(run_dir: Path) -> None:
+    import shutil
+
+    plots_dir = run_dir / "plots"
+    out_dir = run_dir / "paper_figures"
+    ensure_dir(out_dir)
+    figures = []
+    if plots_dir.exists():
+        for path in sorted(plots_dir.glob("*.png")):
+            dest = out_dir / path.name
+            shutil.copy2(path, dest)
+            figures.append(str(dest.relative_to(run_dir)))
+    stats_files = []
+    stats_dir = run_dir / "stats"
+    if stats_dir.exists():
+        for path in sorted(stats_dir.glob("*")):
+            stats_files.append(str(path.relative_to(run_dir)))
+    plot_files = []
+    if plots_dir.exists():
+        for path in sorted(plots_dir.glob("*.png")):
+            plot_files.append(str(path.relative_to(run_dir)))
+    index = {"paper_figures": figures, "plots": plot_files, "stats": stats_files}
+    save_json(run_dir / "index.json", index)
+
+
 def cmd_geometry(args: argparse.Namespace) -> None:
     project_cfg = cfgmod.load_config(Path(args.config)) if args.config else cfgmod.ProjectConfig()
     concept = args.concept
@@ -154,10 +235,12 @@ def cmd_geometry(args: argparse.Namespace) -> None:
         local_files_only=bool(args.local_files_only),
     )
     dataset = dataset_from_samples(samples)
+    artifacts_dir, stats_dir, plots_dir = _get_dirs(args)
+    cache_dir = Path(getattr(args, "cache_dir", artifacts_dir))
     cache = build_or_load_activation_cache(
         bundle,
         dataset=dataset,
-        artifacts_dir=Path("artifacts"),
+        artifacts_dir=cache_dir,
         batch_size=args.batch_size,
         pooling="last",
         capture_sites=("residual", "mlp"),
@@ -176,12 +259,6 @@ def cmd_geometry(args: argparse.Namespace) -> None:
         rng=rng,
     )
 
-    stats_dir = Path("artifacts") / "stats"
-    plots_dir = Path("artifacts") / "plots"
-    ensure_dir(stats_dir)
-    ensure_dir(plots_dir)
-    ensure_dir(stats_dir)
-    ensure_dir(plots_dir)
     safe_model = args.model.replace("/", "__")
     stem = f"{concept}__{split}__{template_family}__{safe_model}"
 
@@ -233,6 +310,16 @@ def cmd_geometry(args: argparse.Namespace) -> None:
             ylabel="Rotation (deg)",
             outpath=plots_dir / f"{stem}_rotation.png",
         )
+    _write_manifest(
+        out_dir=stats_dir,
+        name=f"{stem}_geometry",
+        model_name=args.model,
+        device=str(bundle.device),
+        dataset_signature=dataset.dataset_signature,
+        split_signature=hash_samples(samples),
+        cache_key=cache.metadata.get("cache_key"),
+        extra={"command": "geometry", "concept": concept, "split": split},
+    )
 
 
 def _permute_samples(
@@ -288,10 +375,12 @@ def cmd_controls(args: argparse.Namespace) -> None:
         local_files_only=bool(args.local_files_only),
     )
     dataset = dataset_from_samples(samples)
+    artifacts_dir, stats_dir, plots_dir = _get_dirs(args)
+    cache_dir = Path(getattr(args, "cache_dir", artifacts_dir))
     cache = build_or_load_activation_cache(
         bundle,
         dataset=dataset,
-        artifacts_dir=Path("artifacts"),
+        artifacts_dir=cache_dir,
         batch_size=args.batch_size,
         pooling="last",
         capture_sites=("residual", "mlp"),
@@ -323,8 +412,6 @@ def cmd_controls(args: argparse.Namespace) -> None:
     p_pc1 = float(np.mean(null_pc1 >= observed_pc1_mean))
     p_rot = float(np.mean(null_rot >= observed_rot_mean))
 
-    stats_dir = Path("artifacts") / "stats"
-    plots_dir = Path("artifacts") / "plots"
     safe_model = args.model.replace("/", "__")
     stem = f"{concept}__{split}__{template_family}__{safe_model}"
     np.savez_compressed(
@@ -352,6 +439,16 @@ def cmd_controls(args: argparse.Namespace) -> None:
         xlabel="Rotation mean (deg)",
         outpath=plots_dir / f"{stem}_null_rotation.png",
     )
+    _write_manifest(
+        out_dir=stats_dir,
+        name=f"{stem}_controls",
+        model_name=args.model,
+        device=str(bundle.device),
+        dataset_signature=dataset.dataset_signature,
+        split_signature=hash_samples(samples),
+        cache_key=cache.metadata.get("cache_key"),
+        extra={"command": "controls", "concept": concept, "split": split},
+    )
 
 
 def cmd_ablate(args: argparse.Namespace) -> None:
@@ -369,6 +466,7 @@ def cmd_ablate(args: argparse.Namespace) -> None:
         control_spec=project_cfg.controls,
     )
     m_list = [int(x) for x in args.m_list.split(",") if x.strip()]
+    artifacts_dir, stats_dir, plots_dir = _get_dirs(args)
     if args.layer < 0:
         sweep = run_ablation_layer_sweep(
             samples,
@@ -378,12 +476,8 @@ def cmd_ablate(args: argparse.Namespace) -> None:
             alpha=args.alpha,
             batch_size=args.batch_size,
             seed=args.seed,
-            artifacts_dir=Path("artifacts"),
+            artifacts_dir=Path(getattr(args, "cache_dir", artifacts_dir)),
         )
-        plots_dir = Path("artifacts") / "plots"
-        stats_dir = Path("artifacts") / "stats"
-        ensure_dir(plots_dir)
-        ensure_dir(stats_dir)
         safe_model = args.model.replace("/", "__")
         stem = f"{concept}__{split}__{template_family}__{safe_model}__Lall__{args.method}"
         np.savez_compressed(stats_dir / f"{stem}_layer_sweep.npz", **sweep)
@@ -397,6 +491,16 @@ def cmd_ablate(args: argparse.Namespace) -> None:
             ylabel="Projection delta",
             outpath=plots_dir / f"{stem}_effect_vs_layer.png",
         )
+        _write_manifest(
+            out_dir=stats_dir,
+            name=f"{stem}_ablate_layer_sweep",
+            model_name=args.model,
+            device=str(get_device()),
+            dataset_signature=hash_samples(samples),
+            split_signature=hash_samples(samples),
+            cache_key=None,
+            extra={"command": "ablate_layer_sweep", "concept": concept, "split": split},
+        )
         return
 
     result = run_ablation_stage4(
@@ -409,56 +513,502 @@ def cmd_ablate(args: argparse.Namespace) -> None:
         random_control=bool(args.random_control),
         batch_size=args.batch_size,
         seed=args.seed,
-        artifacts_dir=Path("artifacts"),
+        artifacts_dir=Path(getattr(args, "cache_dir", artifacts_dir)),
     )
-    plots_dir = Path("artifacts") / "plots"
-    stats_dir = Path("artifacts") / "stats"
-    ensure_dir(plots_dir)
-    ensure_dir(stats_dir)
     safe_model = args.model.replace("/", "__")
     stem = f"{concept}__{split}__{template_family}__{safe_model}__L{args.layer}__{args.method}"
     save_ablation_artifacts(result, out_dir=stats_dir, stem=stem)
     plot_ablation_curves(result, out_dir=plots_dir, stem=stem)
+    _write_manifest(
+        out_dir=stats_dir,
+        name=f"{stem}_ablate",
+        model_name=args.model,
+        device=str(get_device()),
+        dataset_signature=result.summary.get("dataset_signature"),
+        split_signature=hash_samples(samples),
+        cache_key=result.summary.get("cache_key"),
+        extra={"command": "ablate", "concept": concept, "split": split},
+    )
+
+
+def cmd_specificity(args: argparse.Namespace) -> None:
+    project_cfg = cfgmod.ProjectConfig()
+    concept_list = [c.strip() for c in args.concepts.split(",") if c.strip()]
+    if len(concept_list) != 2:
+        raise ValueError("Expected exactly two concepts for specificity")
+    concept_a, concept_b = concept_list
+    template_family_a = _resolve_template_family(concept_a, args.template_family, project_cfg)
+    template_family_b = _resolve_template_family(concept_b, args.template_family, project_cfg)
+    samples_a = generate_samples(
+        concept_a,
+        args.split,
+        template_family_a,
+        seed=args.seed,
+        n_per_level=args.n_per_level,
+        data_spec=project_cfg.data,
+        control_spec=project_cfg.controls,
+    )
+    samples_b = generate_samples(
+        concept_b,
+        args.split,
+        template_family_b,
+        seed=args.seed,
+        n_per_level=args.n_per_level,
+        data_spec=project_cfg.data,
+        control_spec=project_cfg.controls,
+    )
+
+    bundle = load_model_bundle(args.model)
+    artifacts_dir, stats_dir, plots_dir = _get_dirs(args)
+    dataset_a = dataset_from_samples(samples_a)
+    dataset_b = dataset_from_samples(samples_b)
+    cache_dir = Path(getattr(args, "cache_dir", artifacts_dir))
+    cache_a = build_or_load_activation_cache(
+        bundle,
+        dataset=dataset_a,
+        artifacts_dir=cache_dir,
+        batch_size=args.batch_size,
+        pooling="last",
+        capture_sites=("residual", "mlp"),
+        use_cache=bool(args.use_cache),
+    )
+    cache_b = build_or_load_activation_cache(
+        bundle,
+        dataset=dataset_b,
+        artifacts_dir=cache_dir,
+        batch_size=args.batch_size,
+        pooling="last",
+        capture_sites=("residual", "mlp"),
+        use_cache=bool(args.use_cache),
+    )
+
+    sim = similarity_across_concepts(samples_a, cache_a.residual, samples_b, cache_b.residual)
+    perm = permutation_test_similarity(
+        samples_a,
+        cache_a.residual,
+        samples_b,
+        cache_b.residual,
+        levels_a=project_cfg.data.concepts[concept_a].levels,
+        levels_b=project_cfg.data.concepts[concept_b].levels,
+        n_shuffles=args.n_shuffles,
+        seed=args.seed,
+    )
+
+    safe_model = args.model.replace("/", "__")
+    stem = f"{concept_a}__{concept_b}__{args.split}__{safe_model}"
+    np.savez_compressed(
+        stats_dir / f"{stem}_similarity.npz",
+        cosine=sim.cosine,
+        angles_deg=sim.angles_deg,
+        null_cosine=perm["null_cosine"],
+        null_angles_deg=perm["null_angles_deg"],
+        p_cosine=perm["p_cosine"],
+        p_angles=perm["p_angles"],
+    )
+
+    layers = np.arange(len(sim.cosine))
+    plot_curve_with_ci(
+        x=layers,
+        mean=sim.cosine,
+        low=None,
+        high=None,
+        label="cosine",
+        title=f"Direction cosine ({concept_a} vs {concept_b})",
+        ylabel="Cosine similarity",
+        outpath=plots_dir / f"{stem}_cosine.png",
+    )
+    plot_curve_with_ci(
+        x=layers,
+        mean=sim.angles_deg,
+        low=None,
+        high=None,
+        label="angles",
+        title=f"Subspace angles ({concept_a} vs {concept_b})",
+        ylabel="Mean angle (deg)",
+        outpath=plots_dir / f"{stem}_angles.png",
+    )
+
+    labels_a = np.array([int(s.metadata.get("level_id", -1)) for s in samples_a], dtype=np.float32)
+    labels_b = np.array([int(s.metadata.get("level_id", -1)) for s in samples_b], dtype=np.float32)
+    if (labels_b < 0).any():
+        raise ValueError("Sample metadata missing level_id")
+    if (labels_a < 0).any():
+        raise ValueError("Sample metadata missing level_id")
+    dirs_a = pc1_directions_from_samples(samples_a, cache_a.residual)
+    dirs_b = pc1_directions_from_samples(samples_b, cache_b.residual)
+    transfer_ab = transfer_direction(dirs_a, cache_b.residual, labels_b)
+    transfer_ba = transfer_direction(dirs_b, cache_a.residual, labels_a)
+    shared_ab = shared_variance_control(dirs_a, dirs_b, cache_b.residual, labels_b)
+    transfer_ablation = cross_ablation_transfer(
+        samples_a,
+        samples_b,
+        model_name=args.model,
+        layer=args.ablate_layer,
+        m=args.m,
+        selection_method=args.method,
+        seed=args.seed,
+        batch_size=args.batch_size,
+        artifacts_dir=Path("artifacts"),
+    )
+    np.savez_compressed(
+        stats_dir / f"{stem}_transfer.npz",
+        spearman_ab=transfer_ab.spearman,
+        auc_extremes_ab=transfer_ab.auc_extremes,
+        spearman_ba=transfer_ba.spearman,
+        auc_extremes_ba=transfer_ba.auc_extremes,
+        shared_control_ab=shared_ab,
+        ablation_effect_a=np.array([transfer_ablation["effect_a"]], dtype=np.float32),
+        ablation_effect_b=np.array([transfer_ablation["effect_b"]], dtype=np.float32),
+    )
+    transfer_matrix = np.array(
+        [
+            [float(np.nanmean(transfer_ab.spearman)), float(np.nanmean(transfer_ab.auc_extremes))],
+            [float(np.nanmean(transfer_ba.spearman)), float(np.nanmean(transfer_ba.auc_extremes))],
+        ],
+        dtype=np.float32,
+    )
+    plot_heatmap(
+        matrix=transfer_matrix,
+        xlabels=["Spearman", "AUC"],
+        ylabels=[f"{concept_a}->{concept_b}", f"{concept_b}->{concept_a}"],
+        title="Transfer summary",
+        outpath=plots_dir / f"{stem}_transfer_heatmap.png",
+    )
+    plot_curve_with_ci(
+        x=layers,
+        mean=transfer_ab.spearman,
+        low=None,
+        high=None,
+        label="spearman",
+        title=f"Transfer Spearman ({concept_a} -> {concept_b})",
+        ylabel="Spearman",
+        outpath=plots_dir / f"{stem}_transfer_spearman.png",
+    )
+    plot_curve_with_ci(
+        x=layers,
+        mean=transfer_ab.auc_extremes,
+        low=None,
+        high=None,
+        label="auc",
+        title=f"Transfer AUC ({concept_a} -> {concept_b})",
+        ylabel="AUC",
+        outpath=plots_dir / f"{stem}_transfer_auc.png",
+    )
+    plot_curve_with_ci(
+        x=layers,
+        mean=shared_ab,
+        low=None,
+        high=None,
+        label="shared",
+        title=f"Shared variance control ({concept_a}->{concept_b})",
+        ylabel="Spearman (residualized)",
+        outpath=plots_dir / f"{stem}_shared_variance.png",
+    )
+    plot_bar(
+        labels=[f"{concept_a} effect", f"{concept_b} effect"],
+        values=np.array(
+            [transfer_ablation["effect_a"], transfer_ablation["effect_b"]], dtype=np.float32
+        ),
+        title="Cross ablation transfer",
+        ylabel="Projection delta",
+        outpath=plots_dir / f"{stem}_ablation_transfer.png",
+    )
+    _write_manifest(
+        out_dir=stats_dir,
+        name=f"{stem}_specificity",
+        model_name=args.model,
+        device=str(bundle.device),
+        dataset_signature=None,
+        split_signature=None,
+        cache_key=None,
+        extra={
+            "command": "specificity",
+            "concepts": [concept_a, concept_b],
+            "split": args.split,
+            "dataset_signature_a": dataset_a.dataset_signature,
+            "dataset_signature_b": dataset_b.dataset_signature,
+            "cache_key_a": cache_a.metadata.get("cache_key"),
+            "cache_key_b": cache_b.metadata.get("cache_key"),
+        },
+    )
+
+
+def cmd_behavior(args: argparse.Namespace) -> None:
+    project_cfg = cfgmod.ProjectConfig()
+    concept = args.concept
+    template_family = _resolve_template_family(concept, args.template_family, project_cfg)
+    samples_d = generate_samples(
+        concept,
+        "discovery",
+        template_family,
+        seed=args.seed,
+        n_per_level=args.n_per_level,
+        data_spec=project_cfg.data,
+        control_spec=project_cfg.controls,
+    )
+    samples_e = generate_samples(
+        concept,
+        "eval",
+        template_family,
+        seed=args.seed,
+        n_per_level=args.n_per_level,
+        data_spec=project_cfg.data,
+        control_spec=project_cfg.controls,
+    )
+    bundle = load_model_bundle(args.model)
+    artifacts_dir, stats_dir, plots_dir = _get_dirs(args)
+    dataset_d = dataset_from_samples(samples_d)
+    dataset_e = dataset_from_samples(samples_e)
+    cache_dir = Path(getattr(args, "cache_dir", artifacts_dir))
+    cache_d = build_or_load_activation_cache(
+        bundle,
+        dataset=dataset_d,
+        artifacts_dir=cache_dir,
+        batch_size=args.batch_size,
+        pooling="last",
+        capture_sites=("residual", "mlp"),
+        use_cache=bool(args.use_cache),
+    )
+    cache_e = build_or_load_activation_cache(
+        bundle,
+        dataset=dataset_e,
+        artifacts_dir=cache_dir,
+        batch_size=args.batch_size,
+        pooling="last",
+        capture_sites=("residual", "mlp"),
+        use_cache=bool(args.use_cache),
+    )
+    labels_d = np.array([int(s.metadata.get("level_id", -1)) for s in samples_d], dtype=np.float32)
+    labels_e = np.array([int(s.metadata.get("level_id", -1)) for s in samples_e], dtype=np.float32)
+    if (labels_d < 0).any() or (labels_e < 0).any():
+        raise ValueError("Sample metadata missing level_id")
+
+    probes = train_ridge_probes(cache_d.residual, labels_d, alpha=1.0)
+    eval_spearman = eval_ridge_probes(
+        cache_e.residual,
+        labels_e,
+        weights=probes.weights,
+        intercepts=probes.intercepts,
+    )
+
+    safe_model = args.model.replace("/", "__")
+    stem = f"{concept}__behavior__{safe_model}"
+    np.savez_compressed(
+        stats_dir / f"{stem}_probe.npz",
+        train_spearman=probes.spearman_by_layer,
+        eval_spearman=eval_spearman,
+    )
+    plot_curve_with_ci(
+        x=np.arange(len(eval_spearman)),
+        mean=eval_spearman,
+        low=None,
+        high=None,
+        label="eval",
+        title=f"Probe Spearman ({concept})",
+        ylabel="Spearman",
+        outpath=plots_dir / f"{stem}_probe_spearman.png",
+    )
+
+    impact = ablation_probe_impact(
+        samples_e,
+        model_name=args.model,
+        layer=args.ablate_layer,
+        m=args.m,
+        selection_method=args.method,
+        weights=probes.weights,
+        intercepts=probes.intercepts,
+        batch_size=args.batch_size,
+        seed=args.seed,
+        artifacts_dir=artifacts_dir,
+    )
+    save_json(stats_dir / f"{stem}_probe_ablation.json", impact)
+    plot_bar(
+        labels=["base", "ablated", "random"],
+        values=np.array(
+            [
+                impact["base_spearman"],
+                impact["ablated_spearman"],
+                impact["random_spearman"],
+            ],
+            dtype=np.float32,
+        ),
+        title="Probe Spearman (base vs ablated vs random)",
+        ylabel="Spearman",
+        outpath=plots_dir / f"{stem}_probe_ablation.png",
+    )
+    _write_manifest(
+        out_dir=stats_dir,
+        name=f"{stem}_behavior",
+        model_name=args.model,
+        device=str(bundle.device),
+        dataset_signature=None,
+        split_signature=None,
+        cache_key=None,
+        extra={
+            "command": "behavior",
+            "concept": concept,
+            "dataset_signature_discovery": dataset_d.dataset_signature,
+            "dataset_signature_eval": dataset_e.dataset_signature,
+            "cache_key_discovery": cache_d.metadata.get("cache_key"),
+            "cache_key_eval": cache_e.metadata.get("cache_key"),
+        },
+    )
 
 
 def cmd_run_all(args: argparse.Namespace) -> None:
+    if args.backend != "nnsight":
+        raise ValueError("Only nnsight backend is supported")
     cfg = load_config(Path(args.config) if args.config else None)
+    raw = {}
+    if args.config:
+        with Path(args.config).open() as f:
+            raw = yaml.safe_load(f) or {}
+
     run_dir = ensure_run_dir(cfg.artifacts_dir, cfg.run_id)
     save_config_snapshot(run_dir, cfg)
     write_run_metadata(run_dir, cfg, seeds=cfg.seeds)
 
-    # Main geometry
-    agg = run_geometry(cfg, permute_labels=False, concept_mode="sentiment", run_dir=run_dir / "geometry")
-    plot_geometry(run_dir, agg, "main")
+    model_names = raw.get("model_names", [cfg.model_name])
+    concepts = raw.get("concepts", ["sentiment", "concreteness"])
+    if args.use_cache is not None:
+        use_cache = bool(args.use_cache)
+    else:
+        use_cache = bool(raw.get("use_cache", True))
+    batch_size = int(raw.get("batch_size", cfg.batch_size))
+    n_per_level = int(raw.get("n_per_level", 2))
+    seed = int(raw.get("seed", 0))
+    geom_bootstrap = int(raw.get("geometry", {}).get("n_bootstrap", 200))
+    spec_shuffles = int(raw.get("specificity", {}).get("n_shuffles", 50))
+    ablation_cfg = raw.get("ablation", {})
+    behavior_cfg = raw.get("behavior", {})
 
-    # Permutation control
-    agg_perm = run_geometry(cfg, permute_labels=True, concept_mode="sentiment", run_dir=run_dir / "permute")
-    plot_geometry(run_dir, agg_perm, "permute")
+    stats_dir = run_dir / "stats"
+    plots_dir = run_dir / "plots"
+    ensure_dir(stats_dir)
+    ensure_dir(plots_dir)
 
-    # Unordered control
-    agg_unordered = run_geometry(cfg, permute_labels=False, concept_mode="unordered", run_dir=run_dir / "unordered")
-    plot_geometry(run_dir, agg_unordered, "unordered")
+    full_all_models = bool(raw.get("run_all_full_all_models", False))
+    for idx, model_name in enumerate(model_names):
+        full = full_all_models or idx == 0
+        print(f"[run_all] model={model_name} full={full}")
+        for concept in concepts:
+            print(f"[run_all] geometry concept={concept} split=discovery")
+            geom_args = argparse.Namespace(
+                config=None,
+                concept=concept,
+                split="discovery",
+                template_family=None,
+                n_per_level=n_per_level,
+                seed=seed,
+                model=model_name,
+                batch_size=batch_size,
+                device=None,
+                use_cache=int(use_cache),
+                n_bootstrap=geom_bootstrap,
+                local_files_only=1,
+                artifacts_dir=run_dir,
+                cache_dir=cfg.artifacts_dir,
+            )
+            cmd_geometry(geom_args)
 
-    # Ablation (on main only) for first seed (or multiple seeds aggregated by caller)
-    ablation_dir = run_dir / "ablation"
-    ensure_dir(ablation_dir)
-    ablation_results = {}
-    for seed in cfg.seeds:
-        for selector in cfg.ablation.selectors:
-            res = run_ablation_legacy(cfg, run_dir=ablation_dir, selector=selector, seed=seed)
-            ablation_results[f"{selector}_seed{seed}"] = {k: v.tolist() for k, v in res.items()}
-    write_manifest(ablation_dir / "ablation_results.json", ablation_results)
+            print(f"[run_all] controls concept={concept} split=discovery")
+            ctrl_args = argparse.Namespace(
+                config=None,
+                concept=concept,
+                split="discovery",
+                template_family=None,
+                n_per_level=n_per_level,
+                seed=seed,
+                model=model_name,
+                batch_size=batch_size,
+                device=None,
+                use_cache=int(use_cache),
+                n_shuffles=spec_shuffles,
+                local_files_only=1,
+                artifacts_dir=run_dir,
+                cache_dir=cfg.artifacts_dir,
+            )
+            cmd_controls(ctrl_args)
+
+            if full:
+                print(f"[run_all] ablate concept={concept} split=eval")
+                ablate_args = argparse.Namespace(
+                    concept=concept,
+                    split="eval",
+                    template_family=None,
+                    n_per_level=n_per_level,
+                    seed=seed,
+                    model=model_name,
+                    batch_size=batch_size,
+                    layer=int(ablation_cfg.get("layer", 2)),
+                    method=ablation_cfg.get("method", "variance"),
+                    m_list=",".join(str(x) for x in ablation_cfg.get("m_list", [5, 10, 20])),
+                    alpha=0.05,
+                    random_control=1,
+                    artifacts_dir=run_dir,
+                    cache_dir=cfg.artifacts_dir,
+                )
+                cmd_ablate(ablate_args)
+
+                print(f"[run_all] behavior concept={concept}")
+                behavior_args = argparse.Namespace(
+                    concept=concept,
+                    template_family=None,
+                    n_per_level=n_per_level,
+                    seed=seed,
+                    model=model_name,
+                    batch_size=batch_size,
+                    use_cache=int(use_cache),
+                    ablate_layer=int(behavior_cfg.get("ablate_layer", 2)),
+                    m=int(behavior_cfg.get("m", 20)),
+                    method=behavior_cfg.get("method", "probe_weight"),
+                    artifacts_dir=run_dir,
+                    cache_dir=cfg.artifacts_dir,
+                )
+                cmd_behavior(behavior_args)
+
+        if "sentiment" in concepts and "concreteness" in concepts:
+            if full:
+                print("[run_all] specificity sentiment,concreteness split=discovery")
+                spec_args = argparse.Namespace(
+                    concepts="sentiment,concreteness",
+                    split="discovery",
+                    template_family=None,
+                    n_per_level=n_per_level,
+                    seed=seed,
+                    model=model_name,
+                    batch_size=batch_size,
+                    use_cache=int(use_cache),
+                    n_shuffles=spec_shuffles,
+                    ablate_layer=int(ablation_cfg.get("layer", 2)),
+                    m=int(ablation_cfg.get("m_list", [20])[0] if ablation_cfg.get("m_list") else 20),
+                    method=ablation_cfg.get("method", "variance"),
+                    artifacts_dir=run_dir,
+                    cache_dir=cfg.artifacts_dir,
+                )
+                cmd_specificity(spec_args)
 
     render_report(
         run_dir,
         {
             "run_dir": str(run_dir),
-            "seeds": cfg.seeds,
-            "model": cfg.model_name,
+            "models": model_names,
+            "concepts": concepts,
         },
     )
     write_methods(run_dir)
     write_reproducibility(run_dir, cfg)
+    _export_paper_figures(run_dir)
+    _write_manifest(
+        out_dir=run_dir / "stats",
+        name="run_all",
+        model_name="multiple",
+        device=str(get_device()),
+        dataset_signature=None,
+        split_signature=None,
+        cache_key=None,
+        extra={"command": "run_all", "models": model_names, "concepts": concepts},
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -467,6 +1017,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     run_all = sub.add_parser("run_all", help="Run full pipeline (geometry + controls + ablation)")
     run_all.add_argument("--config", type=str, default=None, help="Path to YAML config")
+    run_all.add_argument("--backend", type=str, default="nnsight")
+    run_all.add_argument("--use_cache", type=int, default=None)
     run_all.set_defaults(func=cmd_run_all)
 
     geometry = sub.add_parser("geometry", help="Compute geometry metrics + CI from cached activations")
@@ -513,6 +1065,34 @@ def build_parser() -> argparse.ArgumentParser:
     ablate.add_argument("--alpha", type=float, default=0.05)
     ablate.add_argument("--random_control", type=int, default=1)
     ablate.set_defaults(func=cmd_ablate)
+
+    specificity = sub.add_parser("specificity", help="Direction specificity + transfer tests")
+    specificity.add_argument("--concepts", type=str, required=True)
+    specificity.add_argument("--split", type=str, default="discovery")
+    specificity.add_argument("--template_family", type=str, default=None)
+    specificity.add_argument("--n_per_level", type=int, default=2)
+    specificity.add_argument("--seed", type=int, default=0)
+    specificity.add_argument("--model", type=str, default="distilgpt2")
+    specificity.add_argument("--batch_size", type=int, default=8)
+    specificity.add_argument("--use_cache", type=int, default=1)
+    specificity.add_argument("--n_shuffles", type=int, default=50)
+    specificity.add_argument("--ablate_layer", type=int, default=2)
+    specificity.add_argument("--m", type=int, default=20)
+    specificity.add_argument("--method", type=str, default="variance")
+    specificity.set_defaults(func=cmd_specificity)
+
+    behavior = sub.add_parser("behavior", help="Ridge probe behavior + ablation impact")
+    behavior.add_argument("--concept", type=str, default="sentiment")
+    behavior.add_argument("--template_family", type=str, default=None)
+    behavior.add_argument("--n_per_level", type=int, default=2)
+    behavior.add_argument("--seed", type=int, default=0)
+    behavior.add_argument("--model", type=str, default="distilgpt2")
+    behavior.add_argument("--batch_size", type=int, default=8)
+    behavior.add_argument("--use_cache", type=int, default=1)
+    behavior.add_argument("--ablate_layer", type=int, default=2)
+    behavior.add_argument("--m", type=int, default=20)
+    behavior.add_argument("--method", type=str, default="probe_weight")
+    behavior.set_defaults(func=cmd_behavior)
     return p
 
 

@@ -50,7 +50,23 @@ def _ensure_bsh(t: torch.Tensor, batch_size: int) -> torch.Tensor:
     return t
 
 
-@torch.no_grad()
+def _ensure_bsd(
+    t: torch.Tensor, *, batch_size: int, seq_len: int
+) -> torch.Tensor:
+    if t.ndim == 3:
+        return _ensure_bsh(t, batch_size)
+    if t.ndim == 2:
+        if t.shape[0] == batch_size * seq_len:
+            return t.reshape(batch_size, seq_len, -1)
+        if t.shape[0] == seq_len and batch_size == 1:
+            return t.unsqueeze(0)
+        if t.shape[0] == batch_size and t.shape[1] != seq_len:
+            return t.unsqueeze(1)
+    raise ValueError(
+        f"Expected MLP activation shape [B,S,D] or flattened, got {t.shape}"
+    )
+
+
 def capture_residual_with_ablation(
     bundle,
     prompts: Sequence[str],
@@ -89,8 +105,10 @@ def capture_residual_with_ablation(
             for layer, block in enumerate(blocks):
                 if layer == ablate_layer:
                     a = adapter.ffn_out(block)
+                    a_t = a.value if hasattr(a, "value") else a
+                    a_t = _ensure_bsd(a_t, batch_size=bsz, seq_len=enc["input_ids"].shape[1])
                     if mode == "zero":
-                        a[:, :, idx_t.to(a.device)] = 0
+                        a_t[:, :, idx_t.to(a_t.device)] = 0
                     else:
                         raise ValueError(f"Unsupported ablation mode: {mode}")
                 if layer == capture_layer:
@@ -214,6 +232,8 @@ def run_ablation(
         "selection_method": selection_method,
         "m_list": list(m_list),
         "alpha": alpha,
+        "cache_key": cache.metadata.get("cache_key"),
+        "dataset_signature": dataset.dataset_signature,
     }
 
     mlp_dims = [mlp[l].shape[1] for l in range(mlp.shape[0])]

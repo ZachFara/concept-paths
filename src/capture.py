@@ -264,9 +264,29 @@ def capture_activations(
 
         for site in capture_sites:
             pooled_layers: list[torch.Tensor] = []
+            seq_len = enc["input_ids"].shape[1]
             for h in saved[site]:
                 h_t = _ensure_bsh(_value(h), bsz)
-                pooled = _pool_last_token(h_t, last_idx=last_idx, batch_arange=batch_arange)
+                if h_t.ndim == 2:
+                    if h_t.shape[0] == bsz * seq_len:
+                        h_t = h_t.reshape(bsz, seq_len, -1)
+                        pooled = _pool_last_token(h_t, last_idx=last_idx, batch_arange=batch_arange)
+                    elif h_t.shape[0] == seq_len and bsz == 1:
+                        h_t = h_t.unsqueeze(0)
+                        pooled = _pool_last_token(h_t, last_idx=last_idx, batch_arange=batch_arange)
+                    elif h_t.shape[0] != bsz and h_t.shape[1] == bsz:
+                        h_t = h_t.transpose(0, 1)
+                        pooled = h_t
+                    elif h_t.shape[0] == bsz:
+                        pooled = h_t
+                    else:
+                        raise ValueError(
+                            f"Unexpected 2D activation shape {h_t.shape} for batch {bsz}"
+                        )
+                elif h_t.ndim == 3:
+                    pooled = _pool_last_token(h_t, last_idx=last_idx, batch_arange=batch_arange)
+                else:
+                    raise ValueError(f"Expected activation tensor with 2 or 3 dims, got {h_t.shape}")
                 pooled_layers.append(pooled)
             acts = (
                 torch.stack(pooled_layers, dim=0)

@@ -89,3 +89,46 @@ def plot_null_hist(
     plt.tight_layout()
     plt.savefig(outpath)
     plt.close()
+
+
+def plot_heatmap(
+    *,
+    matrix: np.ndarray,
+    xlabels: list[str],
+    ylabels: list[str],
+    title: str,
+    outpath: Path,
+    cmap: str = "viridis",
+) -> None:
+    _setup_matplotlib()
+    ensure_dir(outpath.parent)
+    plt.figure()
+    plt.imshow(matrix, cmap=cmap, aspect="auto")
+    plt.colorbar()
+    plt.xticks(range(len(xlabels)), xlabels, rotation=45, ha="right")
+    plt.yticks(range(len(ylabels)), ylabels)
+    plt.title(title)
+    plt.tight_layout()
+    plt.savefig(outpath)
+    plt.close()
+
+
+def plot_bar(
+    *,
+    labels: list[str],
+    values: np.ndarray,
+    title: str,
+    ylabel: str,
+    outpath: Path,
+) -> None:
+    _setup_matplotlib()
+    ensure_dir(outpath.parent)
+    plt.figure()
+    x = np.arange(len(labels))
+    plt.bar(x, values)
+    plt.xticks(x, labels, rotation=20, ha="right")
+    plt.title(title)
+    plt.ylabel(ylabel)
+    plt.tight_layout()
+    plt.savefig(outpath)
+    plt.close()

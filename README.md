@@ -25,14 +25,15 @@ Notes:
 ## Run (end-to-end, unified CLI)
 
 ```bash
-python -m src.cli run_all --config configs/default.yaml
+python -m src.cli run_all --config configs/paper.yaml --backend nnsight --use_cache 1
 ```
 
-This runs geometry (main + permutation + unordered controls), random baselines, and ablation selectors, and writes:
+This runs geometry + controls, ablation, specificity/transfer, and behavior probes for sentiment and concreteness, and writes:
 - plots in `<artifacts>/<run_id>/plots`
-- arrays/manifests in `<artifacts>/<run_id>/`
+- stats/NPZ/JSON in `<artifacts>/<run_id>/stats`
+- paper figure exports in `<artifacts>/<run_id>/paper_figures`
 - docs in `<artifacts>/<run_id>/docs/`
-- a short `report.md`
+- a short `report.md` + `index.json`
 
 ## Legacy scripts (shims)
 `scripts/run_pca.py`, `scripts/run_rotation.py`, `scripts/run_ablation.py` now forward to the unified CLI with a deprecation notice.
@@ -61,3 +62,5 @@ Plots are written to `plots/`.
 
 The code will use **Apple Silicon MPS** if available, otherwise CPU.
 If nnsight scanning is unstable on MPS for a particular setup, it automatically falls back to CPU for tracing.
+
+See `docs/EXPERIMENTS.md` and `docs/ARTIFACTS.md` for experiment and artifact details.
