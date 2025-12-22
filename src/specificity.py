@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Dict, Sequence
 
 import numpy as np
+import torch
 from scipy.linalg import subspace_angles
 from scipy.stats import spearmanr
 from sklearn.decomposition import PCA
@@ -122,12 +123,19 @@ def permutation_test_similarity(
     levels_b: Sequence[str],
     n_shuffles: int,
     seed: int,
+    verbose: bool = False,
 ) -> Dict[str, np.ndarray]:
     rng = np.random.default_rng(seed)
     base = similarity_across_concepts(samples_a, residual_a, samples_b, residual_b)
     null_cos = np.zeros((n_shuffles, base.cosine.shape[0]), dtype=np.float32)
     null_ang = np.zeros((n_shuffles, base.angles_deg.shape[0]), dtype=np.float32)
-    for i in range(n_shuffles):
+    if verbose:
+        from tqdm import tqdm
+
+        iterator = tqdm(range(n_shuffles), desc="permute similarity", disable=False)
+    else:
+        iterator = range(n_shuffles)
+    for i in iterator:
         perm_a = _permute_samples(samples_a, int(rng.integers(0, 1_000_000)), levels_a)
         perm_b = _permute_samples(samples_b, int(rng.integers(0, 1_000_000)), levels_b)
         sim = similarity_across_concepts(perm_a, residual_a, perm_b, residual_b)
@@ -226,9 +234,13 @@ def cross_ablation_transfer(
     selection_method: str,
     seed: int,
     batch_size: int,
+    device: str | None,
     artifacts_dir,
 ) -> Dict[str, float]:
-    bundle = load_model_bundle(model_name)
+    bundle = load_model_bundle(
+        model_name,
+        device=torch.device(device) if device else None,
+    )
     dataset_a = dataset_from_samples(samples_a)
     dataset_b = dataset_from_samples(samples_b)
     cache_a = build_or_load_activation_cache(

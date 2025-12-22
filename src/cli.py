@@ -10,6 +10,7 @@ from typing import Any, Dict, Sequence
 import numpy as np
 import torch
 import yaml
+from tqdm import tqdm
 
 from . import config as cfgmod
 from .experiments.pipeline import run_ablation as run_ablation_legacy, run_geometry
@@ -262,7 +263,10 @@ def cmd_geometry(args: argparse.Namespace) -> None:
         pooling="last",
         capture_sites=("residual", "mlp"),
         use_cache=bool(args.use_cache),
+        verbose=bool(getattr(args, "verbose", False)),
     )
+    if getattr(args, "verbose", False):
+        print("[geometry] computing deltas")
     residual = cache.residual
     deltas = compute_deltas(
         samples,
@@ -276,12 +280,15 @@ def cmd_geometry(args: argparse.Namespace) -> None:
     pca = compute_pca_metrics(deltas)
     rot = compute_rotation_metrics(pca.subspaces)
 
+    if getattr(args, "verbose", False):
+        print("[geometry] bootstrap CIs")
     rng = np.random.default_rng(args.seed)
     bands = bootstrap_curves(
         samples,
         residual,
         n_bootstrap=args.n_bootstrap,
         rng=rng,
+        verbose=bool(getattr(args, "verbose", False)),
     )
 
     safe_model = args.model.replace("/", "__")
@@ -410,6 +417,7 @@ def cmd_controls(args: argparse.Namespace) -> None:
         pooling="last",
         capture_sites=("residual", "mlp"),
         use_cache=bool(args.use_cache),
+        verbose=bool(getattr(args, "verbose", False)),
     )
     residual = cache.residual
 
@@ -419,10 +427,15 @@ def cmd_controls(args: argparse.Namespace) -> None:
     observed_pc1_mean = float(np.nanmean(base_pca.pc1_curve))
     observed_rot_mean = float(np.nanmean(base_rot.rotation_curve))
 
+    if getattr(args, "verbose", False):
+        print("[controls] building null distributions")
     rng = np.random.default_rng(args.seed)
     null_pc1 = np.zeros((args.n_shuffles,), dtype=np.float32)
     null_rot = np.zeros((args.n_shuffles,), dtype=np.float32)
-    for i in range(args.n_shuffles):
+    iterator = range(args.n_shuffles)
+    if getattr(args, "verbose", False):
+        iterator = tqdm(iterator, desc="permute controls", disable=False)
+    for i in iterator:
         perm_samples = _permute_samples(
             samples,
             seed=int(rng.integers(0, 1_000_000)),
@@ -545,6 +558,7 @@ def cmd_topic_control(args: argparse.Namespace) -> None:
         pooling="last",
         capture_sites=("residual", "mlp"),
         use_cache=bool(args.use_cache),
+        verbose=bool(getattr(args, "verbose", False)),
     )
     cache_ctrl = build_or_load_activation_cache(
         bundle,
@@ -554,8 +568,11 @@ def cmd_topic_control(args: argparse.Namespace) -> None:
         pooling="last",
         capture_sites=("residual", "mlp"),
         use_cache=bool(args.use_cache),
+        verbose=bool(getattr(args, "verbose", False)),
     )
 
+    if getattr(args, "verbose", False):
+        print("[topic_control] computing deltas + directions")
     deltas_sent = compute_deltas(
         samples_sent,
         cache_sent.residual,
@@ -666,6 +683,7 @@ def cmd_ablate(args: argparse.Namespace) -> None:
             alpha=args.alpha,
             batch_size=args.batch_size,
             seed=args.seed,
+            device=args.device,
             artifacts_dir=Path(getattr(args, "cache_dir", artifacts_dir)),
             verbose=bool(getattr(args, "verbose", False)),
         )
@@ -704,6 +722,7 @@ def cmd_ablate(args: argparse.Namespace) -> None:
         random_control=bool(args.random_control),
         batch_size=args.batch_size,
         seed=args.seed,
+        device=args.device,
         artifacts_dir=Path(getattr(args, "cache_dir", artifacts_dir)),
         verbose=bool(getattr(args, "verbose", False)),
     )
@@ -715,7 +734,7 @@ def cmd_ablate(args: argparse.Namespace) -> None:
         out_dir=stats_dir,
         name=f"{stem}_ablate",
         model_name=args.model,
-        device=str(get_device()),
+        device=str(torch.device(args.device)) if args.device else str(get_device()),
         dataset_signature=result.summary.get("dataset_signature"),
         split_signature=hash_samples(samples),
         cache_key=result.summary.get("cache_key"),
@@ -750,7 +769,10 @@ def cmd_specificity(args: argparse.Namespace) -> None:
         control_spec=project_cfg.controls,
     )
 
-    bundle = load_model_bundle(args.model)
+    bundle = load_model_bundle(
+        args.model,
+        device=torch.device(args.device) if args.device else None,
+    )
     artifacts_dir, stats_dir, plots_dir = _get_dirs(args)
     dataset_a = dataset_from_samples(samples_a)
     dataset_b = dataset_from_samples(samples_b)
@@ -763,6 +785,7 @@ def cmd_specificity(args: argparse.Namespace) -> None:
         pooling="last",
         capture_sites=("residual", "mlp"),
         use_cache=bool(args.use_cache),
+        verbose=bool(getattr(args, "verbose", False)),
     )
     cache_b = build_or_load_activation_cache(
         bundle,
@@ -772,8 +795,11 @@ def cmd_specificity(args: argparse.Namespace) -> None:
         pooling="last",
         capture_sites=("residual", "mlp"),
         use_cache=bool(args.use_cache),
+        verbose=bool(getattr(args, "verbose", False)),
     )
 
+    if getattr(args, "verbose", False):
+        print("[specificity] computing similarity + permutation")
     sim = similarity_across_concepts(samples_a, cache_a.residual, samples_b, cache_b.residual)
     perm = permutation_test_similarity(
         samples_a,
@@ -784,6 +810,7 @@ def cmd_specificity(args: argparse.Namespace) -> None:
         levels_b=project_cfg.data.concepts[concept_b].levels,
         n_shuffles=args.n_shuffles,
         seed=args.seed,
+        verbose=bool(getattr(args, "verbose", False)),
     )
 
     safe_model = args.model.replace("/", "__")
@@ -848,6 +875,7 @@ def cmd_specificity(args: argparse.Namespace) -> None:
         selection_method=args.method,
         seed=args.seed,
         batch_size=args.batch_size,
+        device=args.device,
         artifacts_dir=Path("artifacts"),
     )
     np.savez_compressed(
@@ -955,7 +983,10 @@ def cmd_behavior(args: argparse.Namespace) -> None:
         data_spec=project_cfg.data,
         control_spec=project_cfg.controls,
     )
-    bundle = load_model_bundle(args.model)
+    bundle = load_model_bundle(
+        args.model,
+        device=torch.device(args.device) if args.device else None,
+    )
     artifacts_dir, stats_dir, plots_dir = _get_dirs(args)
     dataset_d = dataset_from_samples(samples_d)
     dataset_e = dataset_from_samples(samples_e)
@@ -968,6 +999,7 @@ def cmd_behavior(args: argparse.Namespace) -> None:
         pooling="last",
         capture_sites=("residual", "mlp"),
         use_cache=bool(args.use_cache),
+        verbose=bool(getattr(args, "verbose", False)),
     )
     cache_e = build_or_load_activation_cache(
         bundle,
@@ -977,7 +1009,10 @@ def cmd_behavior(args: argparse.Namespace) -> None:
         pooling="last",
         capture_sites=("residual", "mlp"),
         use_cache=bool(args.use_cache),
+        verbose=bool(getattr(args, "verbose", False)),
     )
+    if getattr(args, "verbose", False):
+        print("[behavior] training + eval probes")
     labels_d = np.array([int(s.metadata.get("level_id", -1)) for s in samples_d], dtype=np.float32)
     labels_e = np.array([int(s.metadata.get("level_id", -1)) for s in samples_e], dtype=np.float32)
     if (labels_d < 0).any() or (labels_e < 0).any():
@@ -1019,6 +1054,7 @@ def cmd_behavior(args: argparse.Namespace) -> None:
         intercepts=probes.intercepts,
         batch_size=args.batch_size,
         seed=args.seed,
+        device=args.device,
         artifacts_dir=artifacts_dir,
     )
     save_json(stats_dir / f"{stem}_probe_ablation.json", impact)
@@ -1088,6 +1124,7 @@ def cmd_run_all(args: argparse.Namespace) -> None:
     ensure_dir(plots_dir)
 
     full_all_models = bool(raw.get("run_all_full_all_models", False))
+    device = args.device
     use_verbose = bool(getattr(args, "verbose", False))
     model_iter = model_names
     if use_verbose:
@@ -1110,7 +1147,7 @@ def cmd_run_all(args: argparse.Namespace) -> None:
                 seed=seed,
                 model=model_name,
                 batch_size=batch_size,
-                device=None,
+                device=device,
                 use_cache=int(use_cache),
                 n_bootstrap=geom_bootstrap,
                 local_files_only=1,
@@ -1133,7 +1170,7 @@ def cmd_run_all(args: argparse.Namespace) -> None:
                 seed=seed,
                 model=model_name,
                 batch_size=batch_size,
-                device=None,
+                device=device,
                 use_cache=int(use_cache),
                 n_bootstrap=geom_bootstrap,
                 local_files_only=1,
@@ -1156,7 +1193,7 @@ def cmd_run_all(args: argparse.Namespace) -> None:
                 seed=seed,
                 model=model_name,
                 batch_size=batch_size,
-                device=None,
+                device=device,
                 use_cache=int(use_cache),
                 n_shuffles=spec_shuffles,
                 local_files_only=1,
@@ -1177,18 +1214,18 @@ def cmd_run_all(args: argparse.Namespace) -> None:
                     seed=seed,
                     model=model_name,
                     batch_size=batch_size,
-                    device=None,
+                    device=device,
                     use_cache=int(use_cache),
                     n_bootstrap=geom_bootstrap,
                     local_files_only=1,
-                artifacts_dir=run_dir,
-                cache_dir=cfg.artifacts_dir,
-                concept_mode="topic_control",
-                topic_pair_strategy="cartesian",
-                pair_subsample_frac=None,
-                verbose=int(use_verbose),
-            )
-            cmd_geometry(topic_geom_args)
+                    artifacts_dir=run_dir,
+                    cache_dir=cfg.artifacts_dir,
+                    concept_mode="topic_control",
+                    topic_pair_strategy="cartesian",
+                    pair_subsample_frac=None,
+                    verbose=int(use_verbose),
+                )
+                cmd_geometry(topic_geom_args)
 
                 print("[run_all] topic_control comparison split=discovery")
                 topic_ctrl_args = argparse.Namespace(
@@ -1199,18 +1236,18 @@ def cmd_run_all(args: argparse.Namespace) -> None:
                     control_template_family="topic_swap_fixed_sentiment",
                     n_per_level=n_per_level,
                     seed=seed,
-                model=model_name,
-                batch_size=batch_size,
-                device=None,
-                use_cache=int(use_cache),
-                local_files_only=1,
-                artifacts_dir=run_dir,
-                cache_dir=cfg.artifacts_dir,
-                topic_pair_strategy="cartesian",
-                pair_subsample_frac=None,
-                verbose=int(use_verbose),
-            )
-            cmd_topic_control(topic_ctrl_args)
+                    model=model_name,
+                    batch_size=batch_size,
+                    device=device,
+                    use_cache=int(use_cache),
+                    local_files_only=1,
+                    artifacts_dir=run_dir,
+                    cache_dir=cfg.artifacts_dir,
+                    topic_pair_strategy="cartesian",
+                    pair_subsample_frac=None,
+                    verbose=int(use_verbose),
+                )
+                cmd_topic_control(topic_ctrl_args)
 
             if full:
                 print(f"[run_all] ablate concept={concept} split=eval")
@@ -1224,14 +1261,15 @@ def cmd_run_all(args: argparse.Namespace) -> None:
                     batch_size=batch_size,
                     layer=int(ablation_cfg.get("layer", 2)),
                     method=ablation_cfg.get("method", "variance"),
-                m_list=",".join(str(x) for x in ablation_cfg.get("m_list", [5, 10, 20])),
-                alpha=0.05,
-                random_control=1,
-                artifacts_dir=run_dir,
-                cache_dir=cfg.artifacts_dir,
-                verbose=int(use_verbose),
-            )
-            cmd_ablate(ablate_args)
+                    m_list=",".join(str(x) for x in ablation_cfg.get("m_list", [5, 10, 20])),
+                    alpha=0.05,
+                    random_control=1,
+                    device=device,
+                    artifacts_dir=run_dir,
+                    cache_dir=cfg.artifacts_dir,
+                    verbose=int(use_verbose),
+                )
+                cmd_ablate(ablate_args)
 
                 print(f"[run_all] behavior concept={concept}")
                 behavior_args = argparse.Namespace(
@@ -1243,13 +1281,14 @@ def cmd_run_all(args: argparse.Namespace) -> None:
                     batch_size=batch_size,
                     use_cache=int(use_cache),
                     ablate_layer=int(behavior_cfg.get("ablate_layer", 2)),
-                m=int(behavior_cfg.get("m", 20)),
-                method=behavior_cfg.get("method", "probe_weight"),
-                artifacts_dir=run_dir,
-                cache_dir=cfg.artifacts_dir,
-                verbose=int(use_verbose),
-            )
-            cmd_behavior(behavior_args)
+                    m=int(behavior_cfg.get("m", 20)),
+                    method=behavior_cfg.get("method", "probe_weight"),
+                    device=device,
+                    artifacts_dir=run_dir,
+                    cache_dir=cfg.artifacts_dir,
+                    verbose=int(use_verbose),
+                )
+                cmd_behavior(behavior_args)
 
         if "sentiment" in concepts and "concreteness" in concepts:
             if full:
@@ -1267,6 +1306,7 @@ def cmd_run_all(args: argparse.Namespace) -> None:
                     ablate_layer=int(ablation_cfg.get("layer", 2)),
                     m=int(ablation_cfg.get("m_list", [20])[0] if ablation_cfg.get("m_list") else 20),
                     method=ablation_cfg.get("method", "variance"),
+                    device=device,
                     artifacts_dir=run_dir,
                     cache_dir=cfg.artifacts_dir,
                     verbose=int(use_verbose),
@@ -1288,7 +1328,7 @@ def cmd_run_all(args: argparse.Namespace) -> None:
         out_dir=run_dir / "stats",
         name="run_all",
         model_name="multiple",
-        device=str(get_device()),
+        device=str(torch.device(device)) if device else str(get_device()),
         dataset_signature=None,
         split_signature=None,
         cache_key=None,
@@ -1304,6 +1344,8 @@ def build_parser() -> argparse.ArgumentParser:
     run_all.add_argument("--config", type=str, default=None, help="Path to YAML config")
     run_all.add_argument("--backend", type=str, default="nnsight")
     run_all.add_argument("--use_cache", type=int, default=None)
+    run_all.add_argument("--device", type=str, default=None)
+    run_all.add_argument("--verbose", type=int, default=0)
     run_all.set_defaults(func=cmd_run_all)
 
     geometry = sub.add_parser("geometry", help="Compute geometry metrics + CI from cached activations")
@@ -1319,6 +1361,7 @@ def build_parser() -> argparse.ArgumentParser:
     geometry.add_argument("--use_cache", type=int, default=1)
     geometry.add_argument("--n_bootstrap", type=int, default=200)
     geometry.add_argument("--local_files_only", type=int, default=1)
+    geometry.add_argument("--verbose", type=int, default=0)
     geometry.add_argument(
         "--concept_mode",
         type=str,
@@ -1347,6 +1390,7 @@ def build_parser() -> argparse.ArgumentParser:
     controls.add_argument("--use_cache", type=int, default=1)
     controls.add_argument("--n_shuffles", type=int, default=50)
     controls.add_argument("--local_files_only", type=int, default=1)
+    controls.add_argument("--verbose", type=int, default=0)
     controls.set_defaults(func=cmd_controls)
 
     topic_control = sub.add_parser(
@@ -1372,6 +1416,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["cartesian", "random"],
     )
     topic_control.add_argument("--pair_subsample_frac", type=float, default=None)
+    topic_control.add_argument("--verbose", type=int, default=0)
     topic_control.set_defaults(func=cmd_topic_control)
 
     ablate = sub.add_parser("ablate", help="Run ablation pipeline")
@@ -1382,11 +1427,13 @@ def build_parser() -> argparse.ArgumentParser:
     ablate.add_argument("--seed", type=int, default=0)
     ablate.add_argument("--model", type=str, default="distilgpt2")
     ablate.add_argument("--batch_size", type=int, default=8)
+    ablate.add_argument("--device", type=str, default=None)
     ablate.add_argument("--layer", type=int, required=True)
     ablate.add_argument("--method", type=str, default="variance")
     ablate.add_argument("--m_list", type=str, default="5,10,20,40,80")
     ablate.add_argument("--alpha", type=float, default=0.05)
     ablate.add_argument("--random_control", type=int, default=1)
+    ablate.add_argument("--verbose", type=int, default=0)
     ablate.set_defaults(func=cmd_ablate)
 
     specificity = sub.add_parser("specificity", help="Direction specificity + transfer tests")
@@ -1397,11 +1444,13 @@ def build_parser() -> argparse.ArgumentParser:
     specificity.add_argument("--seed", type=int, default=0)
     specificity.add_argument("--model", type=str, default="distilgpt2")
     specificity.add_argument("--batch_size", type=int, default=8)
+    specificity.add_argument("--device", type=str, default=None)
     specificity.add_argument("--use_cache", type=int, default=1)
     specificity.add_argument("--n_shuffles", type=int, default=50)
     specificity.add_argument("--ablate_layer", type=int, default=2)
     specificity.add_argument("--m", type=int, default=20)
     specificity.add_argument("--method", type=str, default="variance")
+    specificity.add_argument("--verbose", type=int, default=0)
     specificity.set_defaults(func=cmd_specificity)
 
     behavior = sub.add_parser("behavior", help="Ridge probe behavior + ablation impact")
@@ -1411,10 +1460,12 @@ def build_parser() -> argparse.ArgumentParser:
     behavior.add_argument("--seed", type=int, default=0)
     behavior.add_argument("--model", type=str, default="distilgpt2")
     behavior.add_argument("--batch_size", type=int, default=8)
+    behavior.add_argument("--device", type=str, default=None)
     behavior.add_argument("--use_cache", type=int, default=1)
     behavior.add_argument("--ablate_layer", type=int, default=2)
     behavior.add_argument("--m", type=int, default=20)
     behavior.add_argument("--method", type=str, default="probe_weight")
+    behavior.add_argument("--verbose", type=int, default=0)
     behavior.set_defaults(func=cmd_behavior)
     return p
 

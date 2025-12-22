@@ -184,13 +184,17 @@ def run_ablation(
     random_control: bool = True,
     batch_size: int = 8,
     seed: int = 0,
+    device: str | None = None,
     artifacts_dir: Path = Path("artifacts"),
     verbose: bool = False,
 ) -> AblationResult:
     if not samples_eval:
         raise ValueError("samples_eval required")
 
-    bundle = load_model_bundle(model_name)
+    bundle = load_model_bundle(
+        model_name,
+        device=torch.device(device) if device else None,
+    )
     dataset = dataset_from_samples(samples_eval)
     cache = build_or_load_activation_cache(
         bundle,
@@ -385,10 +389,14 @@ def run_ablation_layer_sweep(
     alpha: float = 0.05,
     batch_size: int = 8,
     seed: int = 0,
+    device: str | None = None,
     artifacts_dir: Path = Path("artifacts"),
     verbose: bool = False,
 ) -> Dict[str, np.ndarray]:
-    bundle = load_model_bundle(model_name)
+    bundle = load_model_bundle(
+        model_name,
+        device=torch.device(device) if device else None,
+    )
     dataset = dataset_from_samples(samples_eval)
     cache = build_or_load_activation_cache(
         bundle,

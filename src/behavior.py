@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Sequence
 
 import numpy as np
+import torch
 from scipy.stats import spearmanr
 from sklearn.linear_model import Ridge
 
@@ -78,9 +79,13 @@ def ablation_probe_impact(
     intercepts: Sequence[float],
     batch_size: int,
     seed: int,
+    device: str | None,
     artifacts_dir,
 ) -> Dict[str, float]:
-    bundle = load_model_bundle(model_name)
+    bundle = load_model_bundle(
+        model_name,
+        device=torch.device(device) if device else None,
+    )
     _ensure_decoder_only(bundle.model)
     dataset = dataset_from_samples(samples_eval)
     cache = build_or_load_activation_cache(

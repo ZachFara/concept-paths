@@ -222,6 +222,7 @@ def capture_activations(
     pooling: str = "last",
     capture_sites: Sequence[CaptureSite] = ("residual", "mlp"),
     desc: str = "capture",
+    verbose: bool = False,
 ) -> dict[CaptureSite, np.ndarray]:
     """
     Capture pooled residual stream (block output) and MLP output per layer.
@@ -244,7 +245,11 @@ def capture_activations(
 
     outputs: dict[CaptureSite, list[np.ndarray]] = {"residual": [], "mlp": []}
 
-    for start in tqdm(range(0, len(prompts), batch_size), desc=desc):
+    for start in tqdm(
+        range(0, len(prompts), batch_size),
+        desc=desc,
+        disable=not verbose,
+    ):
         batch_prompts = prompts[start : start + batch_size]
         device = resolve_device(bundle.lm, bundle.device)
         enc = tokenizer(batch_prompts, return_tensors="pt", padding=True, truncation=True)
@@ -421,6 +426,7 @@ def build_or_load_activation_cache(
     pooling: str = "last",
     capture_sites: Sequence[CaptureSite] = ("residual", "mlp"),
     use_cache: bool = True,
+    verbose: bool = False,
 ) -> ActivationCache:
     ensure_dir(artifacts_dir)
     npz_path, meta_path, cache_key, cache_hash = _cache_paths(
@@ -439,6 +445,11 @@ def build_or_load_activation_cache(
             if loaded_keys is not None:
                 loaded_keys = loaded_keys.astype(str).tolist()
                 if loaded_keys == dataset.keys and meta_obj.get("cache_hash") == cache_hash:
+                    if verbose:
+                        print(
+                            f"[cache] hit {dataset.split} {dataset.concept} {dataset.template_family} "
+                            f"{bundle.model_name}"
+                        )
                     residual = loaded.get("residual")
                     mlp = loaded.get("mlp")
                     if residual is None or mlp is None:
@@ -450,6 +461,11 @@ def build_or_load_activation_cache(
                         metadata=meta_obj,
                     )
 
+    if verbose:
+        print(
+            f"[cache] miss {dataset.split} {dataset.concept} {dataset.template_family} "
+            f"{bundle.model_name} -> capturing"
+        )
     acts = capture_activations(
         bundle,
         dataset.prompts,
@@ -457,6 +473,7 @@ def build_or_load_activation_cache(
         pooling=pooling,
         capture_sites=capture_sites,
         desc=f"capture:{dataset.split}",
+        verbose=verbose,
     )
     residual = acts.get("residual")
     mlp = acts.get("mlp")

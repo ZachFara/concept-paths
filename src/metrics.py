@@ -341,6 +341,7 @@ def bootstrap_curves(
     rng: np.random.Generator,
     solver: Literal["full", "randomized"] = "full",
     thresholds: Sequence[float] = (0.80, 0.90, 0.95),
+    verbose: bool = False,
 ) -> Dict[str, np.ndarray]:
     """
     Bootstrap CI over prompts by resampling sample indices with replacement.
@@ -356,7 +357,14 @@ def bootstrap_curves(
     k_stack: Dict[str, list[np.ndarray]] = {f"k{int(t * 100)}": [] for t in thresholds}
     rot_stack: list[np.ndarray] = []
 
-    for _ in range(n_bootstrap):
+    if verbose:
+        from tqdm import tqdm
+
+        iterator = tqdm(range(n_bootstrap), desc="bootstrap", disable=False)
+    else:
+        iterator = range(n_bootstrap)
+
+    for _ in iterator:
         idx = rng.integers(0, n_samples, size=n_samples)
         boot_samples = [samples[int(i)] for i in idx]
         boot_resid = residual_by_layer[:, idx, :]
