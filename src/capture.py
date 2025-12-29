@@ -111,8 +111,12 @@ class GPT2:
             [t for t in padded], index=out_df.index, dtype=object
         )
         out_df["seq_len"] = lengths
-        out_df["residuals"] = residuals
-        out_df['layer'] = len(model.transformer.h) - 1 # The last layer
+        out_df["residuals"] = pd.Series(
+            [r.detach().cpu() for r in residuals],
+            index=out_df.index,
+            dtype=object,
+        )
+        out_df["layer"] = len(self.LLM.transformer.h) - 1  # The last layer
 
         def pool_last(row):
             resid = row["padded_residual"]
@@ -129,11 +133,46 @@ class GPT2:
     ):
         prompts = df["sentence"].tolist()
         model = self.LLM
-        layer_ids = list(range(len(model.transformer.h)))
+        num_layers = len(model.transformer.h)
+        layer_ids = list(range(num_layers)) if x is None else list(x)
 
+        per_prompt = []
+        for prompt in prompts:
+            layer_resids = self.get_x_residual_stream(prompt, x=layer_ids)
+            per_prompt.append(layer_resids)
 
-def main():
+        max_len_by_layer = {}
+        for layer_id in layer_ids:
+            max_len_by_layer[layer_id] = max(
+                layer_resids[layer_id].shape[1] for layer_resids in per_prompt
+            ) if per_prompt else 0
 
+        rows = []
+        for row, layer_resids in zip(df.to_dict("records"), per_prompt):
+            for layer_id in layer_ids:
+                resid = layer_resids[layer_id]
+                seq_len = resid.shape[1]
+                max_len = max_len_by_layer[layer_id]
+                padded = F.pad(
+                    resid,
+                    (0, 0, 0, max_len - seq_len),
+                ).detach().cpu()
+                hidden_last = padded[:, max(seq_len - 1, 0), :].squeeze(0)
+                new_row = dict(row)
+                new_row.update(
+                    {
+                        "padded_residual": padded,
+                        "seq_len": seq_len,
+                        "residuals": resid.detach().cpu(),
+                        "layer": layer_id,
+                        "hidden_last": hidden_last,
+                    }
+                )
+                rows.append(new_row)
+
+        return pd.DataFrame(rows)
+
+def basic_test():
     gpt = GPT2()
 
     residuals = gpt.get_last_residual_stream("This is a test")
@@ -149,6 +188,52 @@ def main():
     multiple_residuals = gpt.get_multiple_last_residuals(multiple_prompts) 
     print(f"Multiple Residuals (Shape: {multiple_residuals.shape}):")
     print(multiple_residuals)
+
+def testing_x_residuals():
+    gpt = GPT2()
+    num_layers = len(gpt.LLM.transformer.h)
+    layer_ids = [0, num_layers - 1]
+
+    df = pd.DataFrame(
+        [
+            {
+                "sentence_id": "sentence.1",
+                "level_id": "level.1",
+                "word_id": "1",
+                "word": "test",
+                "sentence": "This is a test",
+            },
+            {
+                "sentence_id": "sentence.1",
+                "level_id": "level.2",
+                "word_id": "2",
+                "word": "longer",
+                "sentence": "This is a longer test",
+            },
+        ]
+    )
+
+    out_df = gpt.add_x_residuals_to_df(df, x=layer_ids)
+
+    expected_cols = {
+        "sentence_id",
+        "level_id",
+        "word_id",
+        "word",
+        "sentence",
+        "padded_residual",
+        "seq_len",
+        "residuals",
+        "layer",
+        "hidden_last",
+    }
+    assert expected_cols.issubset(out_df.columns)
+    assert len(out_df) == len(df) * len(layer_ids)
+    print(out_df.head(2))
+def main():
+    basic_test()
+    testing_x_residuals()
+
 
 if __name__ == "__main__":
     main()
