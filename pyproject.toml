@@ -1,0 +1,10 @@
+[project]
+name = "residual-analysis"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "nnsight>=0.5.13",
+    "transformers>=4.57.3",
+]
