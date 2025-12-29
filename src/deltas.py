@@ -19,6 +19,8 @@ logger = setup_logger(__name__)
 class Deltas:
     def __init__(self, df: pd.DataFrame):
         self.df = df
+        self.df["level"] = self.df["level_id"].apply(self.level_to_int)
+        self.ensure_hidden_last()
 
     @staticmethod
     def level_to_int(value) -> Optional[int]:
@@ -98,8 +100,6 @@ def main():
         group_cols = ["sentence_id"]
 
     deltas = Deltas(df)
-    deltas.df["level"] = deltas.df["level_id"].apply(deltas.level_to_int)
-    deltas.ensure_hidden_last()
 
     mu = deltas.compute_mu(group_cols)
     deltas_adj = deltas.compute_adjacent_deltas(mu, group_cols)
