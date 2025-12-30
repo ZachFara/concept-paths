@@ -39,8 +39,7 @@ def main():
     print(f"Adjacent Deltas (Shape: {deltas_adj.shape} Column: {deltas_adj.columns}):\n{deltas_adj}")
 
     # Get out cosin similarities
-    # Analysis A: Compare templates within each adjacent step, then average
-
+    # Analysis A: For each step i.e. (1-2) and layer combination, get the cos similarity of all sentenc IDs and return the average cos similarity for that combination
     analysisA = []
 
     for (layer, level_from, level_to), g in deltas_adj.groupby(['layer', 'level_from', 'level_to']):
@@ -67,7 +66,7 @@ def main():
     analysisA_df = pd.DataFrame(analysisA)
     analysisA_df.to_csv("outputs/analysisA.csv")
 
-    # Analysis B: Aggregate steps into one “template direction” per layer, then compare
+    # Analysis B: For each layer, average the steps (1 - 2) to get a single direction per layer and sentence ID combination. Then compute the pairwise cos similarity between each sentence ID and return the average for that layer
     analysisB = []
     template_vectors = []
     for (sentence_id, layer), g in deltas_adj.groupby(["sentence_id", "layer"]):

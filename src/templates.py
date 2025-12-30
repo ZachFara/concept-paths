@@ -27,6 +27,19 @@ SENTIMENT_WORDS = {
         "level.10": ["exceptional", "remarkable", "superb"],
 }
 
+NULL_WORDS = {
+        "level.1": ["standard", "typical", "usual"],
+        "level.2": ["routine", "regular", "normal"],
+        "level.3": ["conventional", "common", "customary"],
+        "level.4": ["generic", "general", "baseline"],
+        "level.5": ["ordinary", "commonplace", "run-of-the-mill"],
+        "level.6": ["expected", "predictable", "familiar"],
+        "level.7": ["neutral", "unremarkable", "matter-of-fact"],
+        "level.8": ["consistent", "stable", "steady"],
+        "level.9": ["typical", "characteristic", "representative"],
+        "level.10": ["standardized", "regularized", "conventionalized"],
+}
+
 class Template:
     def __init__(self, sentence_dict:dict, words_dict:dict):
         self.sentence_dict = sentence_dict
