@@ -15,24 +15,45 @@ class Plots:
             raise ValueError("Provide df or csv_path")
         return pd.read_csv(csv_path)
 
-    def plot_axis_consistency(self, df=None, csv_path=None, output_path=None, title_suffix=None):
+    def plot_axis_consistency(
+        self,
+        df=None,
+        csv_path=None,
+        output_path=None,
+        title_suffix=None,
+        percentile_ci=False,
+    ):
         # Jackknifed axis consistency: mean and sem across left_out per layer.
         data = self._load_df(df=df, csv_path=csv_path)
         grouped = data.groupby("layer")["G"]
-        summary = grouped.agg(["mean", "sem", "count"]).reset_index()
-        summary["t_crit"] = summary["count"].apply(
-            lambda n: stats.t.ppf(0.975, df=n - 1) if n > 1 else float("nan")
-        )
-        summary["ci_half"] = summary["t_crit"] * summary["sem"]
+        if percentile_ci:
+            summary = grouped.agg(["mean"]).reset_index()
+            ci = grouped.quantile([0.025, 0.975]).unstack()
+            summary["ci_low"] = summary["layer"].map(ci[0.025])
+            summary["ci_high"] = summary["layer"].map(ci[0.975])
+        else:
+            summary = grouped.agg(["mean", "sem", "count"]).reset_index()
+            summary["t_crit"] = summary["count"].apply(
+                lambda n: stats.t.ppf(0.975, df=n - 1) if n > 1 else float("nan")
+            )
+            summary["ci_half"] = summary["t_crit"] * summary["sem"]
 
         fig, ax = plt.subplots()
         ax.plot(summary["layer"], summary["mean"], label="axis consistency")
-        ax.fill_between(
-            summary["layer"],
-            summary["mean"] - summary["ci_half"],
-            summary["mean"] + summary["ci_half"],
-            alpha=0.2,
-        )
+        if percentile_ci:
+            ax.fill_between(
+                summary["layer"],
+                summary["ci_low"],
+                summary["ci_high"],
+                alpha=0.2,
+            )
+        else:
+            ax.fill_between(
+                summary["layer"],
+                summary["mean"] - summary["ci_half"],
+                summary["mean"] + summary["ci_half"],
+                alpha=0.2,
+            )
         ax.set_xlabel("Layer")
         ax.set_ylabel("Cosine similarity")
         title = "Axis Consistency"
@@ -45,27 +66,52 @@ class Plots:
             fig.savefig(output_path, bbox_inches="tight")
         return fig, ax
 
-    def plot_step_consistency(self, df=None, csv_path=None, output_path=None, title_suffix=None):
+    def plot_step_consistency(
+        self,
+        df=None,
+        csv_path=None,
+        output_path=None,
+        title_suffix=None,
+        percentile_ci=False,
+    ):
         # Jackknifed step consistency: mean and sem across left_out per step and layer.
         data = self._load_df(df=df, csv_path=csv_path)
         grouped = data.groupby(["level_from", "level_to", "layer"])["G"]
-        summary = grouped.agg(["mean", "sem", "count"]).reset_index()
-        summary["t_crit"] = summary["count"].apply(
-            lambda n: stats.t.ppf(0.975, df=n - 1) if n > 1 else float("nan")
-        )
-        summary["ci_half"] = summary["t_crit"] * summary["sem"]
+        if percentile_ci:
+            summary = grouped.agg(["mean"]).reset_index()
+            ci = grouped.quantile([0.025, 0.975]).unstack()
+            summary = summary.merge(
+                ci.reset_index()
+                .rename(columns={0.025: "ci_low", 0.975: "ci_high"}),
+                on=["level_from", "level_to", "layer"],
+                how="left",
+            )
+        else:
+            summary = grouped.agg(["mean", "sem", "count"]).reset_index()
+            summary["t_crit"] = summary["count"].apply(
+                lambda n: stats.t.ppf(0.975, df=n - 1) if n > 1 else float("nan")
+            )
+            summary["ci_half"] = summary["t_crit"] * summary["sem"]
 
         fig, ax = plt.subplots()
         for (level_from, level_to), g in summary.groupby(["level_from", "level_to"]):
             g = g.sort_values("layer")
             label = f"{level_from}->{level_to}"
             ax.plot(g["layer"], g["mean"], label=label)
-            ax.fill_between(
-                g["layer"],
-                g["mean"] - g["ci_half"],
-                g["mean"] + g["ci_half"],
-                alpha=0.2,
-            )
+            if percentile_ci:
+                ax.fill_between(
+                    g["layer"],
+                    g["ci_low"],
+                    g["ci_high"],
+                    alpha=0.2,
+                )
+            else:
+                ax.fill_between(
+                    g["layer"],
+                    g["mean"] - g["ci_half"],
+                    g["mean"] + g["ci_half"],
+                    alpha=0.2,
+                )
 
         ax.set_xlabel("Layer")
         ax.set_ylabel("Cosine similarity")
@@ -87,6 +133,7 @@ class Plots:
         output_path=None,
         cumulative=False,
         title_suffix=None,
+        percentile_ci=False,
     ):
         # Jackknifed PCA component variance: mean and CI across left_out per layer.
         data = self._load_df(df=df, csv_path=csv_path)
@@ -105,21 +152,35 @@ class Plots:
             else:
                 col = f"pc{int(comp)}"
                 grouped = data.groupby("layer")[col]
-            summary = grouped.agg(["mean", "sem", "count"]).reset_index()
-            summary["t_crit"] = summary["count"].apply(
-                lambda n: stats.t.ppf(0.975, df=n - 1) if n > 1 else float("nan")
-            )
-            summary["ci_half"] = summary["t_crit"] * summary["sem"]
+            if percentile_ci:
+                summary = grouped.agg(["mean"]).reset_index()
+                ci = grouped.quantile([0.025, 0.975]).unstack()
+                summary["ci_low"] = summary["layer"].map(ci[0.025])
+                summary["ci_high"] = summary["layer"].map(ci[0.975])
+            else:
+                summary = grouped.agg(["mean", "sem", "count"]).reset_index()
+                summary["t_crit"] = summary["count"].apply(
+                    lambda n: stats.t.ppf(0.975, df=n - 1) if n > 1 else float("nan")
+                )
+                summary["ci_half"] = summary["t_crit"] * summary["sem"]
             label = f"pc{int(comp)}"
             if cumulative:
                 label = f"pc1-{int(comp)}"
             ax.plot(summary["layer"], summary["mean"], label=label)
-            ax.fill_between(
-                summary["layer"],
-                summary["mean"] - summary["ci_half"],
-                summary["mean"] + summary["ci_half"],
-                alpha=0.2,
-            )
+            if percentile_ci:
+                ax.fill_between(
+                    summary["layer"],
+                    summary["ci_low"],
+                    summary["ci_high"],
+                    alpha=0.2,
+                )
+            else:
+                ax.fill_between(
+                    summary["layer"],
+                    summary["mean"] - summary["ci_half"],
+                    summary["mean"] + summary["ci_half"],
+                    alpha=0.2,
+                )
 
         ax.set_xlabel("Layer")
         ax.set_ylabel("Explained variance ratio")
@@ -135,7 +196,15 @@ class Plots:
             fig.savefig(output_path, bbox_inches="tight")
         return fig, ax
 
-    def plot_pca_k_thresholds(self, df=None, csv_path=None, thresholds=None, output_path=None, title_suffix=None):
+    def plot_pca_k_thresholds(
+        self,
+        df=None,
+        csv_path=None,
+        thresholds=None,
+        output_path=None,
+        title_suffix=None,
+        percentile_ci=False,
+    ):
         # Jackknifed k-thresholds: mean and CI across left_out per layer.
         data = self._load_df(df=df, csv_path=csv_path)
         if thresholds is None:
@@ -147,18 +216,32 @@ class Plots:
             if col not in data.columns:
                 continue
             grouped = data.groupby("layer")[col]
-            summary = grouped.agg(["mean", "sem", "count"]).reset_index()
-            summary["t_crit"] = summary["count"].apply(
-                lambda n: stats.t.ppf(0.975, df=n - 1) if n > 1 else float("nan")
-            )
-            summary["ci_half"] = summary["t_crit"] * summary["sem"]
+            if percentile_ci:
+                summary = grouped.agg(["mean"]).reset_index()
+                ci = grouped.quantile([0.025, 0.975]).unstack()
+                summary["ci_low"] = summary["layer"].map(ci[0.025])
+                summary["ci_high"] = summary["layer"].map(ci[0.975])
+            else:
+                summary = grouped.agg(["mean", "sem", "count"]).reset_index()
+                summary["t_crit"] = summary["count"].apply(
+                    lambda n: stats.t.ppf(0.975, df=n - 1) if n > 1 else float("nan")
+                )
+                summary["ci_half"] = summary["t_crit"] * summary["sem"]
             ax.plot(summary["layer"], summary["mean"], label=col)
-            ax.fill_between(
-                summary["layer"],
-                summary["mean"] - summary["ci_half"],
-                summary["mean"] + summary["ci_half"],
-                alpha=0.2,
-            )
+            if percentile_ci:
+                ax.fill_between(
+                    summary["layer"],
+                    summary["ci_low"],
+                    summary["ci_high"],
+                    alpha=0.2,
+                )
+            else:
+                ax.fill_between(
+                    summary["layer"],
+                    summary["mean"] - summary["ci_half"],
+                    summary["mean"] + summary["ci_half"],
+                    alpha=0.2,
+                )
 
         ax.set_xlabel("Layer")
         ax.set_ylabel("Components to reach threshold")
@@ -198,23 +281,39 @@ class Plots:
                 alpha=0.8,
             )
 
-    def plot_principal_angles(self, df=None, csv_path=None, output_path=None, title_suffix=None):
+    def plot_principal_angles(
+        self, df=None, csv_path=None, output_path=None, title_suffix=None, percentile_ci=False
+    ):
         data = self._load_df(df=df, csv_path=csv_path)
         grouped = data.groupby("layer_from")["mean_angle"]
-        summary = grouped.agg(["mean", "sem", "count"]).reset_index()
-        summary["t_crit"] = summary["count"].apply(
-            lambda n: stats.t.ppf(0.975, df=n - 1) if n > 1 else float("nan")
-        )
-        summary["ci_half"] = summary["t_crit"] * summary["sem"]
+        if percentile_ci:
+            summary = grouped.agg(["mean"]).reset_index()
+            ci = grouped.quantile([0.025, 0.975]).unstack()
+            summary["ci_low"] = summary["layer_from"].map(ci[0.025])
+            summary["ci_high"] = summary["layer_from"].map(ci[0.975])
+        else:
+            summary = grouped.agg(["mean", "sem", "count"]).reset_index()
+            summary["t_crit"] = summary["count"].apply(
+                lambda n: stats.t.ppf(0.975, df=n - 1) if n > 1 else float("nan")
+            )
+            summary["ci_half"] = summary["t_crit"] * summary["sem"]
 
         fig, ax = plt.subplots()
         ax.plot(summary["layer_from"], summary["mean"], label="principal angle")
-        ax.fill_between(
-            summary["layer_from"],
-            summary["mean"] - summary["ci_half"],
-            summary["mean"] + summary["ci_half"],
-            alpha=0.2,
-        )
+        if percentile_ci:
+            ax.fill_between(
+                summary["layer_from"],
+                summary["ci_low"],
+                summary["ci_high"],
+                alpha=0.2,
+            )
+        else:
+            ax.fill_between(
+                summary["layer_from"],
+                summary["mean"] - summary["ci_half"],
+                summary["mean"] + summary["ci_half"],
+                alpha=0.2,
+            )
         ax.set_xlabel("Layer")
         ax.set_ylabel("Angle (radians)")
         title = "Principal Angles (Adjacent Layers)"
@@ -232,23 +331,39 @@ class Plots:
             fig.savefig(output_path, bbox_inches="tight")
         return fig, ax
 
-    def plot_procrustes_alignment(self, df=None, csv_path=None, output_path=None, title_suffix=None):
+    def plot_procrustes_alignment(
+        self, df=None, csv_path=None, output_path=None, title_suffix=None, percentile_ci=False
+    ):
         data = self._load_df(df=df, csv_path=csv_path)
         grouped = data.groupby("layer_from")["residual_fro"]
-        summary = grouped.agg(["mean", "sem", "count"]).reset_index()
-        summary["t_crit"] = summary["count"].apply(
-            lambda n: stats.t.ppf(0.975, df=n - 1) if n > 1 else float("nan")
-        )
-        summary["ci_half"] = summary["t_crit"] * summary["sem"]
+        if percentile_ci:
+            summary = grouped.agg(["mean"]).reset_index()
+            ci = grouped.quantile([0.025, 0.975]).unstack()
+            summary["ci_low"] = summary["layer_from"].map(ci[0.025])
+            summary["ci_high"] = summary["layer_from"].map(ci[0.975])
+        else:
+            summary = grouped.agg(["mean", "sem", "count"]).reset_index()
+            summary["t_crit"] = summary["count"].apply(
+                lambda n: stats.t.ppf(0.975, df=n - 1) if n > 1 else float("nan")
+            )
+            summary["ci_half"] = summary["t_crit"] * summary["sem"]
 
         fig, ax = plt.subplots()
         ax.plot(summary["layer_from"], summary["mean"], label="procrustes residual")
-        ax.fill_between(
-            summary["layer_from"],
-            summary["mean"] - summary["ci_half"],
-            summary["mean"] + summary["ci_half"],
-            alpha=0.2,
-        )
+        if percentile_ci:
+            ax.fill_between(
+                summary["layer_from"],
+                summary["ci_low"],
+                summary["ci_high"],
+                alpha=0.2,
+            )
+        else:
+            ax.fill_between(
+                summary["layer_from"],
+                summary["mean"] - summary["ci_half"],
+                summary["mean"] + summary["ci_half"],
+                alpha=0.2,
+            )
         ax.set_xlabel("Layer")
         ax.set_ylabel("Frobenius residual")
         title = "Procrustes Alignment (Adjacent Layers)"
@@ -268,6 +383,8 @@ class Plots:
 
 def main():
     plots = Plots()
+
+    # Jackknife
     plots.plot_axis_consistency(
         csv_path="outputs/axis_consistency.csv",
         output_path="outputs/axis_consistency.png",
@@ -312,15 +429,18 @@ def main():
         title_suffix="Jackknife",
     )
 
+    # Bootstrap
     plots.plot_axis_consistency(
         csv_path="outputs/axis_consistency_bootstrap.csv",
         output_path="outputs/axis_consistency_bootstrap.png",
         title_suffix="Bootstrap",
+        percentile_ci=True,
     )
     plots.plot_step_consistency(
         csv_path="outputs/step_consistency_bootstrap.csv",
         output_path="outputs/step_consistency_bootstrap.png",
         title_suffix="Bootstrap",
+        percentile_ci=True,
     )
     plots.plot_pca_components(
         components=[1, 2, 3],
@@ -328,32 +448,90 @@ def main():
         csv_path="outputs/pca_metrics_bootstrap.csv",
         output_path="outputs/pca_components_bootstrap.png",
         title_suffix="Bootstrap",
+        percentile_ci=True,
     )
     plots.plot_pca_k_thresholds(
         thresholds=[85, 90, 95],
         csv_path="outputs/pca_metrics_bootstrap.csv",
         output_path="outputs/pca_thresholds_bootstrap.png",
         title_suffix="Bootstrap",
+        percentile_ci=True,
     )
     plots.plot_principal_angles(
         csv_path="outputs/pca_angles_bootstrap_k5.csv",
         output_path="outputs/pca_angles_bootstrap_k5.png",
         title_suffix="Bootstrap",
+        percentile_ci=True,
     )
     plots.plot_principal_angles(
         csv_path="outputs/pca_angles_bootstrap_var90.csv",
         output_path="outputs/pca_angles_bootstrap_var90.png",
         title_suffix="Bootstrap",
+        percentile_ci=True,
     )
     plots.plot_procrustes_alignment(
         csv_path="outputs/pca_procrustes_bootstrap_k5.csv",
         output_path="outputs/pca_procrustes_bootstrap_k5.png",
         title_suffix="Bootstrap",
+        percentile_ci=True,
     )
     plots.plot_procrustes_alignment(
         csv_path="outputs/pca_procrustes_bootstrap_var90.csv",
         output_path="outputs/pca_procrustes_bootstrap_var90.png",
         title_suffix="Bootstrap",
+        percentile_ci=True,
+    )
+
+    plots.plot_axis_consistency(
+        csv_path="outputs/null_axis_consistency_bootstrap.csv",
+        output_path="outputs/null_axis_consistency_bootstrap.png",
+        title_suffix="Null Bootstrap",
+        percentile_ci=True,
+    )
+    plots.plot_step_consistency(
+        csv_path="outputs/null_step_consistency_bootstrap.csv",
+        output_path="outputs/null_step_consistency_bootstrap.png",
+        title_suffix="Null Bootstrap",
+        percentile_ci=True,
+    )
+    plots.plot_pca_components(
+        components=[1, 2, 3],
+        cumulative=True,
+        csv_path="outputs/null_pca_metrics_bootstrap.csv",
+        output_path="outputs/null_pca_components_bootstrap.png",
+        title_suffix="Null Bootstrap",
+        percentile_ci=True,
+    )
+    plots.plot_pca_k_thresholds(
+        thresholds=[85, 90, 95],
+        csv_path="outputs/null_pca_metrics_bootstrap.csv",
+        output_path="outputs/null_pca_thresholds_bootstrap.png",
+        title_suffix="Null Bootstrap",
+        percentile_ci=True,
+    )
+    plots.plot_principal_angles(
+        csv_path="outputs/null_pca_angles_bootstrap_k5.csv",
+        output_path="outputs/null_pca_angles_bootstrap_k5.png",
+        title_suffix="Null Bootstrap",
+        percentile_ci=True,
+    )
+    plots.plot_principal_angles(
+        csv_path="outputs/null_pca_angles_bootstrap_var90.csv",
+        output_path="outputs/null_pca_angles_bootstrap_var90.png",
+        title_suffix="Null Bootstrap",
+        percentile_ci=True,
+    )
+    plots.plot_procrustes_alignment(
+        csv_path="outputs/null_pca_procrustes_bootstrap_k5.csv",
+        output_path="outputs/null_pca_procrustes_bootstrap_k5.png",
+        title_suffix="Null Bootstrap",
+        percentile_ci=True,
+    )
+    plots.plot_procrustes_alignment(
+        csv_path="outputs/null_pca_procrustes_bootstrap_var90.csv",
+        output_path="outputs/null_pca_procrustes_bootstrap_var90.png",
+        title_suffix="Null Bootstrap",
+        percentile_ci=True,
     )
 
 if __name__ == "__main__":
