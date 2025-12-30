@@ -413,6 +413,7 @@ def main():
         output_path="outputs/pca_angles_k5.png",
         title_suffix="Jackknife",
     )
+
     plots.plot_principal_angles(
         csv_path="outputs/pca_angles_var90.csv",
         output_path="outputs/pca_angles_var90.png",

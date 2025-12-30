@@ -132,11 +132,7 @@ def main():
             "metric_cols": _pc_cols(10) + _k_cols(),
         },
         {
-            "name": "pca_angles_k5",
-            "alt_path": "outputs/pca_angles_bootstrap_k5.csv",
-            "null_path": "outputs/null_pca_angles_bootstrap_k5.csv",
-            "group_cols": ["layer_from", "layer_to"],
-            "metric_cols": ["mean_angle", "max_angle"],
+            "name": "pca_angles_k5", "alt_path": "outputs/pca_angles_bootstrap_k5.csv", "null_path": "outputs/null_pca_angles_bootstrap_k5.csv", "group_cols": ["layer_from", "layer_to"], "metric_cols": ["mean_angle", "max_angle"],
         },
         {
             "name": "pca_angles_var90",
