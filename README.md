@@ -27,3 +27,8 @@ TODOs:
     - Demonstrate at least statistically superior to random ablation
     - Collect a variety of metrics such as logit gap, step consistency drop, etc.
 
+
+THOUGHTS:
+- For a second axis it would be good to include something that could demonstrate tracing safety related axis like rudeness vs. politeness
+- Since sentiment will correlated with rudeness vs. politeness, let's include a third axis of formality
+
