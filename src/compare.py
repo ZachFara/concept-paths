@@ -2,6 +2,8 @@ import os
 import numpy as np
 import pandas as pd
 
+K_LIST = [85, 90, 95]
+
 
 class Comparison:
     def __init__(
@@ -38,6 +40,7 @@ class Comparison:
         group_cols,
         n_boot=1000,
         seed=0,
+        fdr=True,
     ):
         rng = np.random.default_rng(seed)
         rows = []
@@ -95,15 +98,34 @@ class Comparison:
                         row[col] = val
                 rows.append(row)
 
-        return pd.DataFrame(rows)
+        out_df = pd.DataFrame(rows)
+        if fdr and not out_df.empty and "metric" in out_df.columns:
+            out_df["q_value"] = np.nan
+            for metric, g in out_df.groupby("metric"):
+                qvals = _fdr_bh(g["p_two_sided"].to_numpy())
+                out_df.loc[g.index, "q_value"] = qvals
+        return out_df
 
 
 def _pc_cols(n=10):
     return [f"pc{i}" for i in range(1, n + 1)]
 
 
-def _k_cols():
-    return ["k80", "k85", "k90", "k95", "k99"]
+def _k_cols(k_list):
+    return [f"k{int(k)}" for k in k_list]
+
+
+def _fdr_bh(pvals):
+    pvals = np.asarray(pvals, dtype=np.float64)
+    n = pvals.size
+    order = np.argsort(pvals)
+    ranks = np.arange(1, n + 1)
+    qvals = np.empty(n, dtype=np.float64)
+    qvals[order] = pvals[order] * n / ranks
+    qvals = np.minimum.accumulate(qvals[order][::-1])[::-1]
+    out = np.empty(n, dtype=np.float64)
+    out[order] = np.minimum(qvals, 1.0)
+    return out
 
 
 def main():
@@ -112,46 +134,46 @@ def main():
     configs = [
         {
             "name": "step_consistency",
-            "alt_path": "outputs/step_consistency_bootstrap.csv",
-            "null_path": "outputs/null_step_consistency_bootstrap.csv",
+            "alt_path": "outputs/data/bootstrap/step_consistency_bootstrap.csv",
+            "null_path": "outputs/data/bootstrap/null_step_consistency_bootstrap.csv",
             "group_cols": ["layer", "level_from", "level_to"],
             "metric_cols": ["G"],
         },
         {
             "name": "axis_consistency",
-            "alt_path": "outputs/axis_consistency_bootstrap.csv",
-            "null_path": "outputs/null_axis_consistency_bootstrap.csv",
+            "alt_path": "outputs/data/bootstrap/axis_consistency_bootstrap.csv",
+            "null_path": "outputs/data/bootstrap/null_axis_consistency_bootstrap.csv",
             "group_cols": ["layer"],
             "metric_cols": ["G"],
         },
         {
             "name": "pca_metrics",
-            "alt_path": "outputs/pca_metrics_bootstrap.csv",
-            "null_path": "outputs/null_pca_metrics_bootstrap.csv",
+            "alt_path": "outputs/data/bootstrap/pca_metrics_bootstrap.csv",
+            "null_path": "outputs/data/bootstrap/null_pca_metrics_bootstrap.csv",
             "group_cols": ["layer"],
-            "metric_cols": _pc_cols(10) + _k_cols(),
+            "metric_cols": _pc_cols(10) + _k_cols(K_LIST),
         },
         {
-            "name": "pca_angles_k5", "alt_path": "outputs/pca_angles_bootstrap_k5.csv", "null_path": "outputs/null_pca_angles_bootstrap_k5.csv", "group_cols": ["layer_from", "layer_to"], "metric_cols": ["mean_angle", "max_angle"],
+            "name": "pca_angles_k5", "alt_path": "outputs/data/bootstrap/pca_angles_bootstrap_k5.csv", "null_path": "outputs/data/bootstrap/null_pca_angles_bootstrap_k5.csv", "group_cols": ["layer_from", "layer_to"], "metric_cols": ["mean_angle", "max_angle"],
         },
         {
             "name": "pca_angles_var90",
-            "alt_path": "outputs/pca_angles_bootstrap_var90.csv",
-            "null_path": "outputs/null_pca_angles_bootstrap_var90.csv",
+            "alt_path": "outputs/data/bootstrap/pca_angles_bootstrap_var90.csv",
+            "null_path": "outputs/data/bootstrap/null_pca_angles_bootstrap_var90.csv",
             "group_cols": ["layer_from", "layer_to"],
             "metric_cols": ["mean_angle", "max_angle", "k_used"],
         },
         {
             "name": "pca_procrustes_k5",
-            "alt_path": "outputs/pca_procrustes_bootstrap_k5.csv",
-            "null_path": "outputs/null_pca_procrustes_bootstrap_k5.csv",
+            "alt_path": "outputs/data/bootstrap/pca_procrustes_bootstrap_k5.csv",
+            "null_path": "outputs/data/bootstrap/null_pca_procrustes_bootstrap_k5.csv",
             "group_cols": ["layer_from", "layer_to"],
             "metric_cols": ["residual_fro"],
         },
         {
             "name": "pca_procrustes_var90",
-            "alt_path": "outputs/pca_procrustes_bootstrap_var90.csv",
-            "null_path": "outputs/null_pca_procrustes_bootstrap_var90.csv",
+            "alt_path": "outputs/data/bootstrap/pca_procrustes_bootstrap_var90.csv",
+            "null_path": "outputs/data/bootstrap/null_pca_procrustes_bootstrap_var90.csv",
             "group_cols": ["layer_from", "layer_to"],
             "metric_cols": ["residual_fro", "k_used"],
         },
@@ -168,7 +190,7 @@ def main():
             n_boot=1000,
             seed=0,
         )
-        output_path = f"outputs/compare_{cfg['name']}.csv"
+        output_path = f"outputs/data/comparison/compare_{cfg['name']}.csv"
         out_df.to_csv(output_path, index=False)
         print(f"Saved: {output_path}")
         if out_df.empty:
