@@ -13,7 +13,7 @@ TODOs:
     - Investigate whether our LLM runs with noise on
 
 - `comparison.py`
-    - Figure out how to treat each group of layers as a sample rather than each layer in `comparison.py`. Perhaps here we use FDR.
+    - DONE! Figure out how to treat each group of layers as a sample rather than each layer in `comparison.py`. Perhaps here we use FDR.
 
 - `comparison.py` & `bootstrap.py`:
     - Include a label shuffling null hypothesis
