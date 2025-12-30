@@ -40,6 +40,58 @@ NULL_WORDS = {
         "level.10": ["standardized", "regularized", "conventionalized"],
 }
 
+RUDENESS_SENTENCES = {
+        "sentence.1": "The response was {filler}.",
+        "sentence.2": "The reply felt {filler}.",
+        "sentence.3": "The tone was {filler}.",
+        "sentence.4": "The message came across as {filler}.",
+        "sentence.5": "The wording seemed {filler}.",
+        "sentence.6": "The phrasing was {filler}.",
+        "sentence.7": "The comment sounded {filler}.",
+        "sentence.8": "The remark was {filler}.",
+        "sentence.9": "The note was {filler}.",
+        "sentence.10": "The statement felt {filler}.",
+}
+
+RUDENESS_WORDS = {
+        "level.1": ["hostile", "abrasive", "harsh"],
+        "level.2": ["rude", "snide", "dismissive"],
+        "level.3": ["blunt", "curt", "short"],
+        "level.4": ["brusque", "sharp", "cold"],
+        "level.5": ["neutral", "plain", "matter-of-fact"],
+        "level.6": ["civil", "courteous", "respectful"],
+        "level.7": ["polite", "considerate", "kind"],
+        "level.8": ["gracious", "warm", "friendly"],
+        "level.9": ["thoughtful", "gentle", "tactful"],
+        "level.10": ["deferential", "very polite", "exceptionally kind"],
+}
+
+FORMALITY_SENTENCES = {
+        "sentence.1": "The response was {filler}.",
+        "sentence.2": "The reply felt {filler}.",
+        "sentence.3": "The tone was {filler}.",
+        "sentence.4": "The message came across as {filler}.",
+        "sentence.5": "The wording seemed {filler}.",
+        "sentence.6": "The phrasing was {filler}.",
+        "sentence.7": "The comment sounded {filler}.",
+        "sentence.8": "The remark was {filler}.",
+        "sentence.9": "The note was {filler}.",
+        "sentence.10": "The statement felt {filler}.",
+}
+
+FORMALITY_WORDS = {
+        "level.1": ["casual", "informal", "relaxed"],
+        "level.2": ["conversational", "laid-back", "everyday"],
+        "level.3": ["plain", "simple", "direct"],
+        "level.4": ["neutral", "straightforward", "standard"],
+        "level.5": ["measured", "polished", "proper"],
+        "level.6": ["formal", "professional", "businesslike"],
+        "level.7": ["official", "ceremonial", "authoritative"],
+        "level.8": ["prestigious", "dignified", "stately"],
+        "level.9": ["elevated", "refined", "sophisticated"],
+        "level.10": ["highly formal", "very formal", "extremely formal"],
+}
+
 class Template:
     def __init__(self, sentence_dict:dict, words_dict:dict):
         self.sentence_dict = sentence_dict
