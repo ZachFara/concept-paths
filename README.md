@@ -2,12 +2,12 @@ TODOs:
 
 - Larger Project base stuff:
     - Implement a seed that propgates throughout the repository
-    - Create a script which runs everything end to end
+    - DONE! Create a script which runs everything end to end 
     - Implement another LLM
     - Implement another axis besides sentiment
 
 - Immediate organizational problems:
-    - Break out the outputs to send stuff to different places so that we don't have everything going to the same place
+    - DONE! Break out the outputs to send stuff to different places so that we don't have everything going to the same place
 
 - Checks:
     - Investigate whether our LLM runs with noise on

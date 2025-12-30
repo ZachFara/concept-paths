@@ -109,74 +109,68 @@ class Pipeline:
         sentiment_boot = Bootstrap(sentiment_deltas)
         null_boot = Bootstrap(null_deltas)
 
-        sentiment_boot.bootstrap_step_consistency(n_boot=self.n_boot_bootstrap).to_csv(
+        sentiment_outputs = sentiment_boot.bootstrap_everything(
+            n_boot=self.n_boot_bootstrap,
+            k_list=self.k_list,
+            n_pc=self.n_pc,
+            k_rotation=self.k_rotation,
+            variance_threshold=self.variance_threshold,
+        )
+        sentiment_outputs["step_consistency"].to_csv(
             os.path.join(out_dir, "step_consistency_bootstrap.csv"), index=False
         )
-        sentiment_boot.bootstrap_axis_consistency(n_boot=self.n_boot_bootstrap).to_csv(
+        sentiment_outputs["axis_consistency"].to_csv(
             os.path.join(out_dir, "axis_consistency_bootstrap.csv"), index=False
         )
-        sentiment_boot.bootstrap_pca_metrics(
-            n_boot=self.n_boot_bootstrap, k_list=self.k_list, n_pc=self.n_pc
-        ).to_csv(
+        sentiment_outputs["pca_metrics"].to_csv(
             os.path.join(out_dir, "pca_metrics_bootstrap.csv"), index=False
         )
-        sentiment_boot.bootstrap_principal_angles(
-            n_boot=self.n_boot_bootstrap, k=self.k_rotation
-        ).to_csv(
+        sentiment_outputs["principal_angles_k"].to_csv(
             os.path.join(out_dir, f"pca_angles_bootstrap_k{self.k_rotation}.csv"),
             index=False,
         )
-        sentiment_boot.bootstrap_principal_angles(
-            n_boot=self.n_boot_bootstrap, variance_threshold=self.variance_threshold
-        ).to_csv(
+        sentiment_outputs["principal_angles_var"].to_csv(
             os.path.join(out_dir, f"pca_angles_bootstrap_var{int(self.variance_threshold*100)}.csv"),
             index=False,
         )
-        sentiment_boot.bootstrap_procrustes_alignment(
-            n_boot=self.n_boot_bootstrap, k=self.k_rotation
-        ).to_csv(
+        sentiment_outputs["procrustes_k"].to_csv(
             os.path.join(out_dir, f"pca_procrustes_bootstrap_k{self.k_rotation}.csv"),
             index=False,
         )
-        sentiment_boot.bootstrap_procrustes_alignment(
-            n_boot=self.n_boot_bootstrap, variance_threshold=self.variance_threshold
-        ).to_csv(
+        sentiment_outputs["procrustes_var"].to_csv(
             os.path.join(out_dir, f"pca_procrustes_bootstrap_var{int(self.variance_threshold*100)}.csv"),
             index=False,
         )
 
-        null_boot.bootstrap_step_consistency(n_boot=self.n_boot_bootstrap).to_csv(
+        null_outputs = null_boot.bootstrap_everything(
+            n_boot=self.n_boot_bootstrap,
+            k_list=self.k_list,
+            n_pc=self.n_pc,
+            k_rotation=self.k_rotation,
+            variance_threshold=self.variance_threshold,
+        )
+        null_outputs["step_consistency"].to_csv(
             os.path.join(out_dir, "null_step_consistency_bootstrap.csv"), index=False
         )
-        null_boot.bootstrap_axis_consistency(n_boot=self.n_boot_bootstrap).to_csv(
+        null_outputs["axis_consistency"].to_csv(
             os.path.join(out_dir, "null_axis_consistency_bootstrap.csv"), index=False
         )
-        null_boot.bootstrap_pca_metrics(
-            n_boot=self.n_boot_bootstrap, k_list=self.k_list, n_pc=self.n_pc
-        ).to_csv(
+        null_outputs["pca_metrics"].to_csv(
             os.path.join(out_dir, "null_pca_metrics_bootstrap.csv"), index=False
         )
-        null_boot.bootstrap_principal_angles(
-            n_boot=self.n_boot_bootstrap, k=self.k_rotation
-        ).to_csv(
+        null_outputs["principal_angles_k"].to_csv(
             os.path.join(out_dir, f"null_pca_angles_bootstrap_k{self.k_rotation}.csv"),
             index=False,
         )
-        null_boot.bootstrap_principal_angles(
-            n_boot=self.n_boot_bootstrap, variance_threshold=self.variance_threshold
-        ).to_csv(
+        null_outputs["principal_angles_var"].to_csv(
             os.path.join(out_dir, f"null_pca_angles_bootstrap_var{int(self.variance_threshold*100)}.csv"),
             index=False,
         )
-        null_boot.bootstrap_procrustes_alignment(
-            n_boot=self.n_boot_bootstrap, k=self.k_rotation
-        ).to_csv(
+        null_outputs["procrustes_k"].to_csv(
             os.path.join(out_dir, f"null_pca_procrustes_bootstrap_k{self.k_rotation}.csv"),
             index=False,
         )
-        null_boot.bootstrap_procrustes_alignment(
-            n_boot=self.n_boot_bootstrap, variance_threshold=self.variance_threshold
-        ).to_csv(
+        null_outputs["procrustes_var"].to_csv(
             os.path.join(out_dir, f"null_pca_procrustes_bootstrap_var{int(self.variance_threshold*100)}.csv"),
             index=False,
         )

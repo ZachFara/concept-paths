@@ -78,6 +78,65 @@ class Bootstrap:
             results.append(analysis)
         return pd.concat(results, ignore_index=True) if results else pd.DataFrame()
 
+    def bootstrap_everything(
+        self,
+        n_boot=100,
+        seed=0,
+        k_list=None,
+        n_pc=10,
+        k_rotation=5,
+        variance_threshold=0.9,
+    ):
+        rng = np.random.default_rng(seed)
+        outputs = {
+            "step_consistency": [],
+            "axis_consistency": [],
+            "pca_metrics": [],
+            "principal_angles_k": [],
+            "principal_angles_var": [],
+            "procrustes_k": [],
+            "procrustes_var": [],
+        }
+        for b in tqdm(range(n_boot), desc="bootstrap_everything"):
+            boot_df = self._bootstrap_df(rng)
+
+            step_df = Stats(boot_df).step_consistency()
+            step_df["boot_id"] = b
+            outputs["step_consistency"].append(step_df)
+
+            axis_df = Stats(boot_df).axis_consistency()
+            axis_df["boot_id"] = b
+            outputs["axis_consistency"].append(axis_df)
+
+            pca_df = PCA(boot_df).compute_pca_metrics(k_list=k_list, n_pc=n_pc)
+            pca_df["boot_id"] = b
+            outputs["pca_metrics"].append(pca_df)
+
+            angles_k = PCA(boot_df).compute_principal_angles(k=k_rotation)
+            angles_k["boot_id"] = b
+            outputs["principal_angles_k"].append(angles_k)
+
+            angles_var = PCA(boot_df).compute_principal_angles(
+                variance_threshold=variance_threshold
+            )
+            angles_var["boot_id"] = b
+            outputs["principal_angles_var"].append(angles_var)
+
+            proc_k = PCA(boot_df).compute_procrustes_alignment(k=k_rotation)
+            proc_k["boot_id"] = b
+            outputs["procrustes_k"].append(proc_k)
+
+            proc_var = PCA(boot_df).compute_procrustes_alignment(
+                variance_threshold=variance_threshold
+            )
+            proc_var["boot_id"] = b
+            outputs["procrustes_var"].append(proc_var)
+
+        return {
+            key: pd.concat(val, ignore_index=True) if val else pd.DataFrame()
+            for key, val in outputs.items()
+        }
+
 def main():
     gpt = GPT2()
 
