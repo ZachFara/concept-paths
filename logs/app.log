@@ -20904,3 +20904,11 @@
 2025-12-31 11:54:52,273 INFO __main__: Target decoded (positive/negative):  positive/ negative
 2025-12-31 11:54:52,274 INFO __main__: Prompt tokens: [31837, 594, 25, 383, 4045, 1998, 373, 450, 893, 7617, 11352, 3681, 357, 24561, 14, 31591, 2599]
 2025-12-31 11:54:52,274 INFO __main__: Prompt decoded: ['Sent', 'ence', ':', ' The', ' overall', ' experience', ' was', ' ab', 'ys', 'mal', ' Sent', 'iment', ' (', 'positive', '/', 'negative', '):']
+2025-12-31 11:56:05,575 INFO __main__: Target tokens (positive/negative): 3967/4633
+2025-12-31 11:56:05,576 INFO __main__: Target decoded (positive/negative):  positive/ negative
+2025-12-31 11:56:05,576 INFO __main__: Prompt tokens: [31837, 594, 25, 383, 4045, 1998, 373, 450, 893, 7617, 11352, 3681, 357, 24561, 14, 31591, 2599]
+2025-12-31 11:56:05,576 INFO __main__: Prompt decoded: ['Sent', 'ence', ':', ' The', ' overall', ' experience', ' was', ' ab', 'ys', 'mal', ' Sent', 'iment', ' (', 'positive', '/', 'negative', '):']
+2025-12-31 11:58:47,280 INFO __main__: Target tokens (positive/negative): 3967/4633
+2025-12-31 11:58:47,280 INFO __main__: Target decoded (positive/negative):  positive/ negative
+2025-12-31 11:58:47,280 INFO __main__: Prompt tokens: [31837, 594, 25, 383, 4045, 1998, 373, 450, 893, 7617, 11352, 3681, 357, 24561, 14, 31591, 2599]
+2025-12-31 11:58:47,280 INFO __main__: Prompt decoded: ['Sent', 'ence', ':', ' The', ' overall', ' experience', ' was', ' ab', 'ys', 'mal', ' Sent', 'iment', ' (', 'positive', '/', 'negative', '):']
