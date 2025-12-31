@@ -7,6 +7,7 @@
 6. Perform linear probing ablation
 """
 
+import math
 import pandas as pd
 import torch
 
@@ -101,7 +102,7 @@ class GPT2Ablator:
                  positive_string:str = " positive",
                  negative_string:str = " negative"
                  ):
-        self.model = GPT2()
+        self.model = GPT2(n = 10)
         self.llm = self.model.LLM
         self.tokenizer = self.llm.tokenizer
         self.n_layers = self.llm.config.n_layer
@@ -174,12 +175,231 @@ class GPT2Ablator:
         probs = torch.softmax(last_logits, dim=-1)
         return probs.tolist()
 
-def main():
+    def get_residual_activations(self, df):
+
+        df = df.copy()
+        
+        df_with_resids = self.model.add_x_residuals_to_df(df, sentence_column = "prompt")
+
+        return df_with_resids
+
+    def train_linear_probes(self, df, epochs=200, lr=1e-2, seed=0):
+
+        df = df.copy()
+        df_with_resids = self.get_residual_activations(df)
+
+        self.linear_probes = {}
+        for layer_id in sorted(df_with_resids["layer"].unique()):
+            layer_df = df_with_resids[df_with_resids["layer"] == layer_id]
+            train_df = layer_df[layer_df["split"] == "TRAIN"]
+            test_df = layer_df[layer_df["split"] == "TEST"]
+
+            X_train = torch.stack(train_df["hidden_last"].tolist())
+            y_train = torch.tensor(
+                (train_df["label"] == "positive").astype(int).values,
+                dtype=torch.float32,
+            ).unsqueeze(1)
+            X_test = torch.stack(test_df["hidden_last"].tolist())
+            y_test = torch.tensor(
+                (test_df["label"] == "positive").astype(int).values,
+                dtype=torch.float32,
+            ).unsqueeze(1)
+
+            torch.manual_seed(seed)
+            model = torch.nn.Linear(self.n_neurons, 1)
+            optim = torch.optim.Adam(model.parameters(), lr=lr)
+            loss_fn = torch.nn.BCEWithLogitsLoss()
+
+            for _ in range(int(epochs)):
+                optim.zero_grad()
+                logits = model(X_train)
+                loss = loss_fn(logits, y_train)
+                loss.backward()
+                optim.step()
+
+            with torch.no_grad():
+                train_logits = model(X_train).squeeze(1)
+                test_logits = model(X_test).squeeze(1)
+                train_pred = (torch.sigmoid(train_logits) >= 0.5).float()
+                test_pred = (torch.sigmoid(test_logits) >= 0.5).float()
+                train_acc = (train_pred == y_train.squeeze(1)).float().mean().item()
+                test_acc = (test_pred == y_test.squeeze(1)).float().mean().item()
+
+            self.linear_probes[layer_id] = {
+                "weight": model.weight.detach().cpu().squeeze(0),
+                "bias": model.bias.detach().cpu().squeeze(0),
+                "train_acc": train_acc,
+                "test_acc": test_acc,
+            }
+
+        return self.linear_probes
+
+    def linear_probe_logits(self, prompt, top_k=None):
+        if not self.linear_probes:
+            raise RuntimeError("Linear probes not trained. Call train_linear_probes first.")
+        if top_k is None:
+            top_k = self.top_k
+
+        ablation_map = {}
+        for layer_id, probe in self.linear_probes.items():
+            weights = probe["weight"]
+            _, indices = torch.topk(torch.abs(weights), int(top_k))
+            ablation_map[layer_id] = indices.tolist()
+
+        tokenized = self.tokenizer(
+            prompt,
+            return_tensors="pt",
+            add_special_tokens=False,
+        )
+        with self.llm.trace(tokenized):
+            for layer_id, neuron_ids in ablation_map.items():
+                self.llm.transformer.h[layer_id].output[0][:, :, neuron_ids] = 0
+            logits = self.llm.lm_head.output[0].save()
+        return logits.detach().cpu()
+
+    def normal_probas(self, prompt):
+        logits = self.baseline_logits(prompt)
+        return self.get_probas(logits)
+
+    def random_probas(self, prompt, seed=0):
+        logits = self.random_ablation(prompt, seed=seed)
+        return self.get_probas(logits)
+
+    def linear_probas(self, prompt, top_k=None):
+        logits = self.linear_probe_logits(prompt, top_k=top_k)
+        return self.get_probas(logits)
+    
+    def fill_test_df(self, df, seed=0, top_k=None):
+        df = df.copy()
+        test_df = df[df["split"] == "TEST"].copy()
+
+        normal_probs = []
+        random_probs = []
+        linear_probs = []
+
+        for _, row in test_df.iterrows():
+            prompt = row["prompt"]
+            normal_probs.append(self.normal_probas(prompt))
+            random_probs.append(self.random_probas(prompt, seed=seed))
+            linear_probs.append(self.linear_probas(prompt, top_k=top_k))
+
+        test_df[["normal_pos", "normal_neg"]] = pd.DataFrame(
+            normal_probs, index=test_df.index
+        )
+        test_df[["random_pos", "random_neg"]] = pd.DataFrame(
+            random_probs, index=test_df.index
+        )
+        test_df[["linear_pos", "linear_neg"]] = pd.DataFrame(
+            linear_probs, index=test_df.index
+        )
+
+        return test_df
+
+    def score_probas_df(self, scored_df):
+        df = scored_df.copy()
+        results = []
+        for method in ["normal", "random", "linear"]:
+            pos_col = f"{method}_pos"
+            neg_col = f"{method}_neg"
+            is_pos = df["label"] == "positive"
+            prob = df[pos_col].where(is_pos, df[neg_col])
+            nll = (-torch.log(torch.tensor(prob.values))).mean().item()
+            pred_pos = df[pos_col] >= df[neg_col]
+            acc = (pred_pos == is_pos).mean()
+            results.append(
+                {
+                    "method": method,
+                    "logit_loss": nll,
+                    "accuracy": acc,
+                }
+            )
+        return pd.DataFrame(results)
+
+    def score_significance(
+        self,
+        scored_df,
+        method_a="linear",
+        method_b="random",
+        n_boot=1000,
+        n_perm=1000,
+        seed=0,
+        eps=1e-9,
+    ):
+        df = scored_df.copy()
+        a_pos = df[f"{method_a}_pos"].values
+        a_neg = df[f"{method_a}_neg"].values
+        b_pos = df[f"{method_b}_pos"].values
+        b_neg = df[f"{method_b}_neg"].values
+        is_pos = (df["label"] == "positive").values
+
+        a_prob = torch.tensor(
+            [p if pos else n for p, n, pos in zip(a_pos, a_neg, is_pos)],
+            dtype=torch.float32,
+        ).clamp(min=eps)
+        b_prob = torch.tensor(
+            [p if pos else n for p, n, pos in zip(b_pos, b_neg, is_pos)],
+            dtype=torch.float32,
+        ).clamp(min=eps)
+
+        delta = (-torch.log(b_prob)) - (-torch.log(a_prob))
+        obs_mean = delta.mean().item()
+
+        rng = torch.Generator().manual_seed(int(seed))
+        boot_means = []
+        n = len(delta)
+        for _ in range(int(n_boot)):
+            idx = torch.randint(0, n, (n,), generator=rng)
+            boot_means.append(delta[idx].mean().item())
+        boot_means = sorted(boot_means)
+        lo = boot_means[int(0.025 * len(boot_means))]
+        hi = boot_means[int(0.975 * len(boot_means))]
+
+        perm_means = []
+        for _ in range(int(n_perm)):
+            signs = torch.randint(0, 2, (n,), generator=rng) * 2 - 1
+            perm_means.append((delta * signs).mean().item())
+        perm_means = torch.tensor(perm_means)
+        perm_p = (perm_means.abs() >= abs(obs_mean)).float().mean().item()
+
+        a_correct = (a_pos >= a_neg) == is_pos
+        b_correct = (b_pos >= b_neg) == is_pos
+        wins_a = int(((a_correct == True) & (b_correct == False)).sum())
+        wins_b = int(((a_correct == False) & (b_correct == True)).sum())
+        n_wins = wins_a + wins_b
+
+        def binom_cdf(k, n, p):
+            return sum(math.comb(n, i) * (p ** i) * ((1 - p) ** (n - i)) for i in range(k + 1))
+
+        if n_wins == 0:
+            sign_p = 1.0
+        else:
+            k = min(wins_a, wins_b)
+            sign_p = 2 * binom_cdf(k, n_wins, 0.5)
+            sign_p = min(1.0, sign_p)
+
+        return pd.DataFrame(
+            [
+                {
+                    "method_a": method_a,
+                    "method_b": method_b,
+                    "mean_nll_gap": obs_mean,
+                    "boot_ci_low": lo,
+                    "boot_ci_high": hi,
+                    "perm_p_value": perm_p,
+                    "sign_test_p_value": sign_p,
+                    "wins_a": wins_a,
+                    "wins_b": wins_b,
+                }
+            ]
+        )
+
+    
+
+    
+def rand_norm_linear_single_prompt():
     data = AblationData(SENTIMENT_SENTENCES, SENTIMENT_WORDS, 3)
     ablator = GPT2Ablator(data, SENTIMENT_ABLATION_TEMPLATE, 100)
     templated_sentences_df = ablator.get_templated_sentences(train_split = .5)
-
-    templated_sentences_df.to_csv("testing.csv")
 
     test_prompt = templated_sentences_df['prompt'].loc[0]
 
@@ -191,9 +411,37 @@ def main():
     normal_prob_pos, normal_prob_neg = ablator.get_probas(normal_logits)
     random_prob_pos, random_prob_neg = ablator.get_probas(random_ablated_logits)
 
+
+    ablator.train_linear_probes(templated_sentences_df, epochs=100)
+    linear_logits = ablator.linear_probe_logits(test_prompt)
+
+    linear_prob_pos, linear_prob_neg = ablator.get_probas(linear_logits)
+    
     print(f"Normal p(pos)={normal_prob_pos:.4f} p(neg)={normal_prob_neg:.4f}")
     print(f"Ablated p(pos)={random_prob_pos:.4f} p(neg)={random_prob_neg:.4f}")
+    print(f"Linear probe p(pos)={linear_prob_pos:.4f} p(neg)={linear_prob_neg:.4f}")
+    for layer_id, stats in sorted(ablator.linear_probes.items()):
+        print(
+            f"Layer {layer_id} probe acc: train={stats['train_acc']:.3f} "
+            f"test={stats['test_acc']:.3f}"
+        )
 
+def score_df():
+    data = AblationData(SENTIMENT_SENTENCES, SENTIMENT_WORDS, 4)
+    ablator = GPT2Ablator(data, SENTIMENT_ABLATION_TEMPLATE, 10)
+    templated_sentences_df = ablator.get_templated_sentences(train_split = .8)
+    ablator.train_linear_probes(templated_sentences_df, epochs=100)
+    scored_df = ablator.fill_test_df(templated_sentences_df)
+    scored_summary = ablator.score_probas_df(scored_df)
+    scored_significance = ablator.score_significance(scored_df)
+    print(scored_summary)
+    print(scored_significance)
+    scored_summary.to_csv("summary.csv")
+    scored_significance.to_csv("significance.csv")
+
+def main():
+    # rand_norm_linear_single_prompt()
+    score_df()
 
 if __name__ == "__main__":
     main()

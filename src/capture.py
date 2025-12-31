@@ -32,7 +32,7 @@ class GPT2:
         logger.info("Last decoded tokens: %s", last_untokenized_tokens)
 
         with model.trace(tokenized_input):
-            resid_last = model.transformer.layers[-1].output[0].save()
+            resid_last = model.transformer.h[-1].output[0].save()
 
         return resid_last
 
@@ -89,9 +89,10 @@ class GPT2:
 
     def add_padded_residuals_to_df(
         self,
-        df
+        df,
+        sentence_column = "sentence"
     ):
-        prompts = df["sentence"].tolist()
+        prompts = df[sentence_column].tolist()
         residuals = []
         lengths = []
         for prompt in prompts:
@@ -128,9 +129,10 @@ class GPT2:
     def add_x_residuals_to_df(
         self,
         df,
-        x = None
+        x = None,
+        sentence_column = "sentence"
     ):
-        prompts = df["sentence"].tolist()
+        prompts = df[sentence_column].tolist()
         model = self.LLM
         num_layers = len(model.transformer.h)
         layer_ids = list(range(num_layers)) if x is None else list(x)

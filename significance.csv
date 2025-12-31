@@ -1,0 +1,2 @@
+,method_a,method_b,mean_nll_gap,boot_ci_low,boot_ci_high,perm_p_value,sign_test_p_value,wins_a,wins_b
+0,linear,random,-0.07721379399299622,-0.09233216196298599,-0.061525437980890274,0.0,0.001953125,0,10
