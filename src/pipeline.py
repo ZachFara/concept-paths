@@ -6,8 +6,8 @@ if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
 from src.bootstrap import Bootstrap
-from src.capture import GPT2
-from src.templates import Template, SENTIMENT_WORDS, SENTIMENT_SENTENCES, NULL_WORDS
+from src.capture import GPT2, Pythia
+from src.templates import Template, SENTIMENT_WORDS, SENTIMENT_SENTENCES, NULL_WORDS, FORMALITY_SENTENCES, FORMALITY_WORDS, POLITENESS_SENTENCES, POLITENESS_WORDS
 from src.compare import Comparison
 from src.deltas import Deltas
 from src.pca import PCA
@@ -401,13 +401,12 @@ class Pipeline:
             percentile_ci=True,
         )
 
-
-def main():
-    gpt = GPT2()
-    sentiment_template = Template(SENTIMENT_SENTENCES, SENTIMENT_WORDS)
-    null_sentiment_template = Template(SENTIMENT_SENTENCES, NULL_WORDS)
+def run_everything(llm, sentences, words, output_path = "outputs"):
+    llm = llm()
+    sentiment_template = Template(sentences, words)
+    null_sentiment_template = Template(sentences, NULL_WORDS)
     pipeline = Pipeline(
-        output_path="outputs",
+        output_path=output_path,
         k_list=[85, 90, 95],
         stats_subdir="data/stats",
         pca_subdir="data/pca",
@@ -416,14 +415,26 @@ def main():
         plots_subdir="plots",
     )
 
-    sentiment_deltas = pipeline.get_deltas(sentiment_template, gpt)
-    null_sentiment_deltas = pipeline.get_deltas(null_sentiment_template, gpt)
+    sentiment_deltas = pipeline.get_deltas(sentiment_template, llm)
+    null_sentiment_deltas = pipeline.get_deltas(null_sentiment_template, llm)
 
     pipeline.get_stats(sentiment_deltas)
     pipeline.run_pca(sentiment_deltas)
     pipeline.run_bootstrap(sentiment_deltas, null_sentiment_deltas)
     pipeline.run_comparison()
     pipeline.run_plots()
+
+def main():
+
+    # GPT2 
+    run_everything(GPT2, SENTIMENT_SENTENCES, SENTIMENT_WORDS, output_path= "outputs/gpt/sentiment")
+    run_everything(GPT2, POLITENESS_SENTENCES, POLITENESS_WORDS, output_path= "outputs/gpt/politeness")
+    run_everything(GPT2, FORMALITY_SENTENCES, FORMALITY_WORDS, output_path= "outputs/gpt/formality")
+    
+    # Pythia
+    run_everything(Pythia, SENTIMENT_SENTENCES, SENTIMENT_WORDS, output_path= "outputs/pythia/sentiment")
+    run_everything(Pythia, POLITENESS_SENTENCES, POLITENESS_WORDS, output_path= "outputs/pythia/politeness")
+    run_everything(Pythia, FORMALITY_SENTENCES, FORMALITY_WORDS, output_path= "outputs/pythia/formality")
 
 if __name__ == "__main__":
     main()

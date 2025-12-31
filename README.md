@@ -3,8 +3,8 @@ TODOs:
 - Larger Project base stuff:
     - Implement a seed that propgates throughout the repository
     - DONE! Create a script which runs everything end to end 
-    - Implement another LLM
-    - Implement another axis besides sentiment
+    - DONE! Implement another LLM
+    - DONE! Implement another axis besides sentiment
 
 - Immediate organizational problems:
     - DONE! Break out the outputs to send stuff to different places so that we don't have everything going to the same place
@@ -32,3 +32,23 @@ THOUGHTS:
 - For a second axis it would be good to include something that could demonstrate tracing safety related axis like rudeness vs. politeness
 - Since sentiment will correlated with rudeness vs. politeness, let's include a third axis of formality
 
+COMPLETED TODOs:
+
+- Larger Project base stuff:
+    - DONE! Create a script which runs everything end to end 
+    - DONE! Implement another LLM
+    - DONE! Implement another axis besides sentiment
+
+- Immediate organizational problems:
+    - DONE! Break out the outputs to send stuff to different places so that we don't have everything going to the same place
+
+- Checks:
+
+- `comparison.py`
+    - DONE! Figure out how to treat each group of layers as a sample rather than each layer in `comparison.py`. Perhaps here we use FDR.
+
+- `comparison.py` & `bootstrap.py`:
+
+- Potential new script `sensitivity.py`
+
+- `ablation.py`

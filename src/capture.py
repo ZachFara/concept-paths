@@ -32,7 +32,7 @@ class GPT2:
         logger.info("Last decoded tokens: %s", last_untokenized_tokens)
 
         with model.trace(tokenized_input):
-            resid_last = model.gpt_neox.layers[-1].output[0].save()
+            resid_last = model.transformer.layers[-1].output[0].save()
 
         return resid_last
 
@@ -54,14 +54,14 @@ class GPT2:
         logger.info("Last token ids: %s", last_n_ids)
         logger.info("Last decoded tokens: %s", last_untokenized_tokens)
 
-        num_layers = len(model.gpt_neox.layers)
+        num_layers = len(model.transformer.h)
         layer_ids = list(range(num_layers)) if x is None else list(x)
 
         residuals = {}
 
         with model.trace(tokenized_input) as tracer:
             for i in layer_ids:
-                residuals[i] = model.gpt_neox.layers[i].output[0].save()
+                residuals[i] = model.transformer.h[i].output[0].save()
 
         return residuals
     
@@ -115,7 +115,7 @@ class GPT2:
             index=out_df.index,
             dtype=object,
         )
-        out_df["layer"] = len(self.LLM.gpt_neox.layers) - 1  # The last layer
+        out_df["layer"] = len(self.LLM.transformer.h) - 1  # The last layer
 
         def pool_last(row):
             resid = row["padded_residual"]
@@ -132,7 +132,7 @@ class GPT2:
     ):
         prompts = df["sentence"].tolist()
         model = self.LLM
-        num_layers = len(model.gpt_neox.layers)
+        num_layers = len(model.transformer.h)
         layer_ids = list(range(num_layers)) if x is None else list(x)
 
         per_prompt = []

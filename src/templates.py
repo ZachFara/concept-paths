@@ -40,20 +40,20 @@ NULL_WORDS = {
         "level.10": ["standardized", "regularized", "conventionalized"],
 }
 
-RUDENESS_SENTENCES = {
-        "sentence.1": "The response was {filler}.",
-        "sentence.2": "The reply felt {filler}.",
-        "sentence.3": "The tone was {filler}.",
-        "sentence.4": "The message came across as {filler}.",
-        "sentence.5": "The wording seemed {filler}.",
-        "sentence.6": "The phrasing was {filler}.",
-        "sentence.7": "The comment sounded {filler}.",
-        "sentence.8": "The remark was {filler}.",
-        "sentence.9": "The note was {filler}.",
-        "sentence.10": "The statement felt {filler}.",
+POLITENESS_SENTENCES = {
+        "sentence.1": "The response was {filler}",
+        "sentence.2": "The reply felt {filler}",
+        "sentence.3": "The tone was {filler}",
+        "sentence.4": "The message came across as {filler}",
+        "sentence.5": "The wording seemed {filler}",
+        "sentence.6": "The phrasing was {filler}",
+        "sentence.7": "The comment sounded {filler}",
+        "sentence.8": "The remark was {filler}",
+        "sentence.9": "The note was {filler}",
+        "sentence.10": "The statement felt {filler}",
 }
 
-RUDENESS_WORDS = {
+POLITENESS_WORDS = {
         "level.1": ["hostile", "abrasive", "harsh"],
         "level.2": ["rude", "snide", "dismissive"],
         "level.3": ["blunt", "curt", "short"],
@@ -67,16 +67,16 @@ RUDENESS_WORDS = {
 }
 
 FORMALITY_SENTENCES = {
-        "sentence.1": "The response was {filler}.",
-        "sentence.2": "The reply felt {filler}.",
-        "sentence.3": "The tone was {filler}.",
-        "sentence.4": "The message came across as {filler}.",
-        "sentence.5": "The wording seemed {filler}.",
-        "sentence.6": "The phrasing was {filler}.",
-        "sentence.7": "The comment sounded {filler}.",
-        "sentence.8": "The remark was {filler}.",
-        "sentence.9": "The note was {filler}.",
-        "sentence.10": "The statement felt {filler}.",
+        "sentence.1": "The response was {filler}",
+        "sentence.2": "The reply felt {filler}",
+        "sentence.3": "The tone was {filler}",
+        "sentence.4": "The message came across as {filler}",
+        "sentence.5": "The wording seemed {filler}",
+        "sentence.6": "The phrasing was {filler}",
+        "sentence.7": "The comment sounded {filler}",
+        "sentence.8": "The remark was {filler}",
+        "sentence.9": "The note was {filler}",
+        "sentence.10": "The statement felt {filler}",
 }
 
 FORMALITY_WORDS = {
