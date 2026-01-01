@@ -12,8 +12,12 @@ import pandas as pd
 import torch
 
 from src.capture import GPT2
+from src.deltas import Deltas
 from src.logs import setup_logger
-from src.templates import SENTIMENT_SENTENCES, SENTIMENT_WORDS
+from src.pca import PCA
+from src.templates import SENTIMENT_SENTENCES, SENTIMENT_WORDS, Template
+from src.deltas import Deltas
+from src.pca import PCA
 
 logger = setup_logger(__name__)
 
@@ -114,6 +118,7 @@ class GPT2Ablator:
         self.positive_string = positive_string
         self.negative_string = negative_string
         self.pos_id, self.neg_id = self.get_pos_neg_ids()
+        self._pca_ablation_cache = {}
 
         print(f"This ablator will ablate: {(self.top_k / self.n_neurons) * 100:.2f}% of the neurons in this model")
 
@@ -268,20 +273,26 @@ class GPT2Ablator:
     def linear_probas(self, prompt, top_k=None):
         logits = self.linear_probe_logits(prompt, top_k=top_k)
         return self.get_probas(logits)
-    
-    def fill_test_df(self, df, seed=0, top_k=None):
+
+    def pca_probas(self, prompt, pca_dict, top_k=None):
+        logits = self.pca_ablation_logits(prompt, pca_dict, top_k=top_k)
+        return self.get_probas(logits)
+
+    def fill_test_df(self, df, pca_dict, seed=0, top_k=None):
         df = df.copy()
         test_df = df[df["split"] == "TEST"].copy()
 
         normal_probs = []
         random_probs = []
         linear_probs = []
+        pca_probs = []
 
         for _, row in test_df.iterrows():
             prompt = row["prompt"]
             normal_probs.append(self.normal_probas(prompt))
             random_probs.append(self.random_probas(prompt, seed=seed))
             linear_probs.append(self.linear_probas(prompt, top_k=top_k))
+            pca_probs.append(self.pca_probas(prompt, pca_dict, top_k=top_k))
 
         test_df[["normal_pos", "normal_neg"]] = pd.DataFrame(
             normal_probs, index=test_df.index
@@ -292,13 +303,43 @@ class GPT2Ablator:
         test_df[["linear_pos", "linear_neg"]] = pd.DataFrame(
             linear_probs, index=test_df.index
         )
+        test_df[["pca_pos", "pca_neg"]] = pd.DataFrame(
+            pca_probs, index=test_df.index
+        )
 
         return test_df
+
+    def get_pca_ablation_map(self, pca_dict, top_k=None, train_split=0.8):
+        if top_k is None:
+            top_k = self.top_k
+        cache_key = (id(pca_dict), int(top_k), float(train_split))
+        if cache_key in self._pca_ablation_cache:
+            return self._pca_ablation_cache[cache_key]
+        df = self.get_templated_sentences(train_split=train_split)
+        ablation_map = self.get_directions(df, pca_dict)
+        self._pca_ablation_cache[cache_key] = ablation_map
+        return ablation_map
+
+    def pca_ablation_logits(self, prompt, pca_dict, top_k=None):
+        if top_k is None:
+            top_k = self.top_k
+        ablation_map = self.get_pca_ablation_map(pca_dict, top_k=top_k)
+
+        tokenized = self.tokenizer(
+            prompt,
+            return_tensors="pt",
+            add_special_tokens=False,
+        )
+        with self.llm.trace(tokenized):
+            for layer_id, neuron_ids in ablation_map.items():
+                self.llm.transformer.h[layer_id].output[0][:, :, neuron_ids] = 0
+            logits = self.llm.lm_head.output[0].save()
+        return logits.detach().cpu()
 
     def score_probas_df(self, scored_df):
         df = scored_df.copy()
         results = []
-        for method in ["normal", "random", "linear"]:
+        for method in ["normal", "random", "linear", "pca"]:
             pos_col = f"{method}_pos"
             neg_col = f"{method}_neg"
             is_pos = df["label"] == "positive"
@@ -314,6 +355,34 @@ class GPT2Ablator:
                 }
             )
         return pd.DataFrame(results)
+
+    def get_directions(self, df, pca_dict):
+
+        train_df = df[df['split'] == "TRAIN"]
+        df_with_resids = self.get_residual_activations(train_df)
+        ablation_map = {}
+
+        for layer_id, pca in pca_dict.items():
+            layer_df = df_with_resids[df_with_resids["layer"] == layer_id]
+            if layer_df.empty:
+                raise ValueError(f"No residuals found for layer {layer_id}")
+
+            if not hasattr(pca, "components_"):
+                raise ValueError(f"PCA object for layer {layer_id} missing components_")
+            direction_vec = torch.tensor(pca.components_[0], dtype=torch.float32)
+            if direction_vec.shape != (self.n_neurons,):
+                raise ValueError(
+                    f"PCA component for layer {layer_id} has shape {direction_vec.shape}, "
+                    f"expected ({self.n_neurons},)"
+                )
+
+            hidden_stack = torch.stack(layer_df["hidden_last"].tolist())
+            scores = torch.mean(torch.abs(hidden_stack * direction_vec), dim=0)
+            _, indices = torch.topk(scores, int(self.top_k))
+            ablation_map[layer_id] = indices.tolist()
+
+        return ablation_map
+
 
     def score_significance(
         self,
@@ -431,13 +500,34 @@ def score_df():
     ablator = GPT2Ablator(data, SENTIMENT_ABLATION_TEMPLATE, 10)
     templated_sentences_df = ablator.get_templated_sentences(train_split = .8)
     ablator.train_linear_probes(templated_sentences_df, epochs=100)
-    scored_df = ablator.fill_test_df(templated_sentences_df)
+
+    
+    temp = Template(SENTIMENT_SENTENCES, SENTIMENT_WORDS)
+    gpt = GPT2()
+
+    df = temp.get_all_sentences()
+    df = gpt.add_x_residuals_to_df(df = df, x = None)
+
+    delta = Deltas(df)
+
+    group_cols = ["sentence_id", "layer"]
+
+    mu = delta.compute_mu(group_cols=group_cols)
+    deltas_adj = delta.compute_adjacent_deltas(mu, group_cols)
+
+    pca = PCA(deltas_adj)
+
+    pca_dict = pca.get_all_layer_pca(deltas_adj)
+
+    print("Getting Scored DF")
+    scored_df = ablator.fill_test_df(templated_sentences_df, pca_dict)
     scored_summary = ablator.score_probas_df(scored_df)
     scored_significance = ablator.score_significance(scored_df)
     print(scored_summary)
     print(scored_significance)
     scored_summary.to_csv("summary.csv")
     scored_significance.to_csv("significance.csv")
+
 
 def main():
     # rand_norm_linear_single_prompt()
