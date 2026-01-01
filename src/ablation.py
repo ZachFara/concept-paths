@@ -15,11 +15,12 @@ logger = setup_logger(__name__)
 SENTIMENT_ABLATION_TEMPLATE = "Sentence: {sentence}. Sentiment (positive/negative):"
 
 class AblationData:
-    def __init__(self, sentences, words, cutoff):
+    def __init__(self, sentences, words, cutoff, template=None):
         """Cutoff is the number of bottom levels treated as negative and top levels treated as positive."""
         self.sentences = sentences
         self.words = words
         self.cutoff = int(cutoff)
+        self.template = template
         self._validate()
 
     def _validate(self):
@@ -89,6 +90,17 @@ class AblationData:
                         )
         return pd.DataFrame(rows)
 
+    def get_templated_sentences(self, train_split=0.8, template=None) -> pd.DataFrame:
+        df = self.get_labeled_sentences(train_split=train_split)
+        df = df.copy()
+        template = template or self.template
+        if not template:
+            raise ValueError("template must be provided to format sentences")
+        df["prompt"] = [
+            template.format(sentence=sentence) for sentence in df["sentence"]
+        ]
+        return df
+
 class GPT2Ablator:
     def __init__(self,
                  data:AblationData,
@@ -105,6 +117,8 @@ class GPT2Ablator:
         self.data = data
         assert isinstance(data, AblationData)
         self.template = template
+        if self.data.template is None:
+            self.data.template = template
         self.top_k = top_k
         self.positive_string = positive_string
         self.negative_string = negative_string
@@ -112,14 +126,6 @@ class GPT2Ablator:
         self._pca_ablation_cache = {}
 
         print(f"This ablator will ablate: {(self.top_k / self.n_neurons) * 100:.2f}% of the neurons in this model")
-
-    def get_templated_sentences(self, train_split = 0.8) -> pd.DataFrame:
-        df = self.data.get_labeled_sentences(train_split = train_split)
-        df = df.copy()
-        df["prompt"] = [
-            self.template.format(sentence=sentence) for sentence in df["sentence"]
-        ]
-        return df
 
     def random_ablation(self, prompt, seed = 0):
         tokenized = self.tokenizer(
@@ -253,6 +259,60 @@ class GPT2Ablator:
             logits = self.llm.lm_head.output[0].save()
         return logits.detach().cpu()
 
+    def get_pca_ablation_map(self, pca_dict, top_k=None, train_split=0.8):
+        if top_k is None:
+            top_k = self.top_k
+        cache_key = (id(pca_dict), int(top_k), float(train_split))
+        if cache_key in self._pca_ablation_cache:
+            return self._pca_ablation_cache[cache_key]
+        df = self.data.get_templated_sentences(train_split=train_split)
+        ablation_map = self.get_directions(df, pca_dict)
+        self._pca_ablation_cache[cache_key] = ablation_map
+        return ablation_map
+
+    def pca_ablation_logits(self, prompt, pca_dict, top_k=None):
+        if top_k is None:
+            top_k = self.top_k
+        ablation_map = self.get_pca_ablation_map(pca_dict, top_k=top_k)
+
+        tokenized = self.tokenizer(
+            prompt,
+            return_tensors="pt",
+            add_special_tokens=False,
+        )
+        with self.llm.trace(tokenized):
+            for layer_id, neuron_ids in ablation_map.items():
+                self.llm.transformer.h[layer_id].output[0][:, :, neuron_ids] = 0
+            logits = self.llm.lm_head.output[0].save()
+        return logits.detach().cpu()
+
+    def get_directions(self, df, pca_dict):
+
+        train_df = df[df['split'] == "TRAIN"]
+        df_with_resids = self.get_residual_activations(train_df)
+        ablation_map = {}
+
+        for layer_id, pca in pca_dict.items():
+            layer_df = df_with_resids[df_with_resids["layer"] == layer_id]
+            if layer_df.empty:
+                raise ValueError(f"No residuals found for layer {layer_id}")
+
+            if not hasattr(pca, "components_"):
+                raise ValueError(f"PCA object for layer {layer_id} missing components_")
+            direction_vec = torch.tensor(pca.components_[0], dtype=torch.float32)
+            if direction_vec.shape != (self.n_neurons,):
+                raise ValueError(
+                    f"PCA component for layer {layer_id} has shape {direction_vec.shape}, "
+                    f"expected ({self.n_neurons},)"
+                )
+
+            hidden_stack = torch.stack(layer_df["hidden_last"].tolist())
+            scores = torch.mean(torch.abs(hidden_stack * direction_vec), dim=0)
+            _, indices = torch.topk(scores, int(self.top_k))
+            ablation_map[layer_id] = indices.tolist()
+
+        return ablation_map
+
     def normal_probas(self, prompt):
         logits = self.baseline_logits(prompt)
         return self.get_probas(logits)
@@ -300,33 +360,6 @@ class GPT2Ablator:
 
         return test_df
 
-    def get_pca_ablation_map(self, pca_dict, top_k=None, train_split=0.8):
-        if top_k is None:
-            top_k = self.top_k
-        cache_key = (id(pca_dict), int(top_k), float(train_split))
-        if cache_key in self._pca_ablation_cache:
-            return self._pca_ablation_cache[cache_key]
-        df = self.get_templated_sentences(train_split=train_split)
-        ablation_map = self.get_directions(df, pca_dict)
-        self._pca_ablation_cache[cache_key] = ablation_map
-        return ablation_map
-
-    def pca_ablation_logits(self, prompt, pca_dict, top_k=None):
-        if top_k is None:
-            top_k = self.top_k
-        ablation_map = self.get_pca_ablation_map(pca_dict, top_k=top_k)
-
-        tokenized = self.tokenizer(
-            prompt,
-            return_tensors="pt",
-            add_special_tokens=False,
-        )
-        with self.llm.trace(tokenized):
-            for layer_id, neuron_ids in ablation_map.items():
-                self.llm.transformer.h[layer_id].output[0][:, :, neuron_ids] = 0
-            logits = self.llm.lm_head.output[0].save()
-        return logits.detach().cpu()
-
     def score_probas_df(self, scored_df):
         df = scored_df.copy()
         results = []
@@ -346,38 +379,6 @@ class GPT2Ablator:
                 }
             )
         return pd.DataFrame(results)
-
-    def get_directions(self, df, pca_dict):
-
-        train_df = df[df['split'] == "TRAIN"]
-        df_with_resids = self.get_residual_activations(train_df)
-        ablation_map = {}
-
-        for layer_id, pca in pca_dict.items():
-            layer_df = df_with_resids[df_with_resids["layer"] == layer_id]
-            if layer_df.empty:
-                raise ValueError(f"No residuals found for layer {layer_id}")
-
-            if not hasattr(pca, "components_"):
-                raise ValueError(f"PCA object for layer {layer_id} missing components_")
-            direction_vec = torch.tensor(pca.components_[0], dtype=torch.float32)
-            if direction_vec.shape != (self.n_neurons,):
-                raise ValueError(
-                    f"PCA component for layer {layer_id} has shape {direction_vec.shape}, "
-                    f"expected ({self.n_neurons},)"
-                )
-
-            hidden_stack = torch.stack(layer_df["hidden_last"].tolist())
-            scores = torch.mean(torch.abs(hidden_stack * direction_vec), dim=0)
-            _, indices = torch.topk(scores, int(self.top_k))
-            ablation_map[layer_id] = indices.tolist()
-
-        return ablation_map
-
-
-
-    
-
     
 def rand_norm_linear_single_prompt():
     data = AblationData(SENTIMENT_SENTENCES, SENTIMENT_WORDS, 3)
@@ -510,7 +511,7 @@ class AblationResults:
 def score_df():
     data = AblationData(SENTIMENT_SENTENCES, SENTIMENT_WORDS, 4)
     ablator = GPT2Ablator(data, SENTIMENT_ABLATION_TEMPLATE, 10)
-    templated_sentences_df = ablator.get_templated_sentences(train_split = .8)
+    templated_sentences_df = data.get_templated_sentences(train_split = .8)
     ablator.train_linear_probes(templated_sentences_df, epochs=100)
 
     

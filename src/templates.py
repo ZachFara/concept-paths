@@ -1,5 +1,6 @@
-
 import pandas as pd
+
+SENTIMENT_ABLATION_TEMPLATE = "Sentence: {sentence}. Sentiment (positive/negative):"
 
 SENTIMENT_SENTENCES = {
         "sentence.1": "The overall experience was {filler}",
