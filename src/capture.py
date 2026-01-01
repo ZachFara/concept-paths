@@ -28,8 +28,8 @@ class GPT2:
         last_n_ids = input_ids[-n:].tolist()
         last_untokenized_tokens = [tokenizer.decode(id) for id in last_n_ids]
 
-        logger.info("Last token ids: %s", last_n_ids)
-        logger.info("Last decoded tokens: %s", last_untokenized_tokens)
+        logger.debug("Last token ids: %s", last_n_ids)
+        logger.debug("Last decoded tokens: %s", last_untokenized_tokens)
 
         with model.trace(tokenized_input):
             resid_last = model.transformer.h[-1].output[0].save()
@@ -51,8 +51,8 @@ class GPT2:
         last_n_ids = input_ids[-n:].tolist()
         last_untokenized_tokens = [tokenizer.decode(id) for id in last_n_ids]
 
-        logger.info("Last token ids: %s", last_n_ids)
-        logger.info("Last decoded tokens: %s", last_untokenized_tokens)
+        logger.debug("Last token ids: %s", last_n_ids)
+        logger.debug("Last decoded tokens: %s", last_untokenized_tokens)
 
         num_layers = len(model.transformer.h)
         layer_ids = list(range(num_layers)) if x is None else list(x)
@@ -195,8 +195,8 @@ class Pythia:
         last_n_ids = input_ids[-n:].tolist()
         last_untokenized_tokens = [tokenizer.decode(id) for id in last_n_ids]
 
-        logger.info("Last token ids: %s", last_n_ids)
-        logger.info("Last decoded tokens: %s", last_untokenized_tokens)
+        logger.debug("Last token ids: %s", last_n_ids)
+        logger.debug("Last decoded tokens: %s", last_untokenized_tokens)
 
         with model.trace(tokenized_input):
             resid_last = model.gpt_neox.layers[-1].output[0].save()
@@ -218,8 +218,8 @@ class Pythia:
         last_n_ids = input_ids[-n:].tolist()
         last_untokenized_tokens = [tokenizer.decode(id) for id in last_n_ids]
 
-        logger.info("Last token ids: %s", last_n_ids)
-        logger.info("Last decoded tokens: %s", last_untokenized_tokens)
+        logger.debug("Last token ids: %s", last_n_ids)
+        logger.debug("Last decoded tokens: %s", last_untokenized_tokens)
 
         num_layers = len(model.gpt_neox.layers)
         layer_ids = list(range(num_layers)) if x is None else list(x)

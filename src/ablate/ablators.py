@@ -339,6 +339,7 @@ def main():
     print("Getting scored data from all ablation methods...")
     scored_df = ablator.fill_test_df(templated_sentences_df, pca_dict)
     print(f"Done. Here is the scored data: {scored_df}")
+    scored_df.to_csv("scored_data.csv")
 
 if __name__ == "__main__":
     main()
