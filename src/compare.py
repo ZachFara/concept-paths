@@ -14,9 +14,18 @@ class Comparison:
         alt_csv_path=None,
         null_df=None,
         null_csv_path=None,
+        seed = 0,
+        config:Config = None
     ):
         self.alt_df = self._load_df(alt_df, alt_csv_path)
         self.null_df = self._load_df(null_df, null_csv_path)
+
+        if config:
+            self.seed = config.random_seed
+        else:
+            self.seed = seed
+
+        assert self.seed is not None
 
     def _load_df(self, df=None, csv_path=None):
         if df is not None:
@@ -41,9 +50,13 @@ class Comparison:
         metric_cols,
         group_cols,
         n_boot=1000,
-        seed=0,
+        seed=None,
         fdr=True,
     ):
+
+        if seed is None:
+            seed = self.seed
+
         rng = np.random.default_rng(seed)
         rows = []
         for metric in metric_cols:
@@ -132,9 +145,9 @@ def _fdr_bh(pvals):
 
 def main():
     os.makedirs("outputs", exist_ok=True)
-    cfg = Config("config/test.yaml")
-    seed = getattr(cfg, "seed", 0)
-    n_boot = getattr(cfg, "n_boot", 1000)
+    config = Config("config/test.yaml")
+    seed = config.get('random_seed', 0)
+    n_boot = config.get('n_boot', 1000)
 
     configs = [
         {

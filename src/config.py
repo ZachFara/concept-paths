@@ -33,6 +33,8 @@ class Config:
             return [self._to_namespace(item) for item in value]
         return value
 
+    def get(self, key, default=None):
+        return getattr(self, key, default)
 
 def main():
     cfg = Config("config/test.yaml")
