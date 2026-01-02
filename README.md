@@ -2,6 +2,12 @@ TODOs:
 
 - Larger Project base stuff:
     - Implement a seed that propgates throughout the repository
+        - `capture.py`
+        - `deltas.py`
+        - `stats.py`
+        - `plots.py`
+        - `templates.py`
+        - 
     - DONE! Create a script which runs everything end to end 
     - DONE! Implement another LLM
     - DONE! Implement another axis besides sentiment
@@ -22,10 +28,13 @@ TODOs:
     - Verify the sensitivity of n_boot and K doesn't change the results, demonstrate stability.
 
 - `ablation.py`
-    - Include ablation in some respect
-    - Compare to linear probe based ablation & random ablation
-    - Demonstrate at least statistically superior to random ablation
-    - Collect a variety of metrics such as logit gap, step consistency drop, etc.
+    - DONE! Include ablation in some respect
+    - DONE! Compare to linear probe based ablation & random ablation
+    - DONE! Demonstrate at least statistically superior to random ablation
+    - Collect a variety of metrics such as 
+        - DONE! logit gap
+        - DONE! Accuracy drop
+        - step consistency drop
 
 
 THOUGHTS:
