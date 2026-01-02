@@ -33,7 +33,7 @@ class GPT2Ablator:
         self.pos_id, self.neg_id = self.get_pos_neg_ids()
         self._pca_ablation_cache = {}
 
-        print(f"This ablator will ablate: {(self.top_k / self.n_neurons) * 100:.2f}% of the neurons in this model")
+        logger.info(f"This ablator will ablate: {(self.top_k / self.n_neurons) * 100:.2f}% of the neurons in this model")
 
     def random_ablation(self, prompt, seed = 0):
         tokenized = self.tokenizer(

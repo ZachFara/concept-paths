@@ -1,0 +1,7 @@
+method_a,method_b,mean_nll_gap,boot_ci_low,boot_ci_high,perm_p_value,sign_test_p_value,wins_a,wins_b
+linear,normal,0.0,0.0,0.0,1.0,1.0,0,0
+linear,pca,0.0,0.0,0.0,1.0,1.0,0,0
+linear,random,0.0,0.0,0.0,1.0,1.0,0,0
+normal,pca,0.0,0.0,0.0,1.0,1.0,0,0
+normal,random,0.0,0.0,0.0,1.0,1.0,0,0
+pca,random,0.0,0.0,0.0,1.0,1.0,0,0

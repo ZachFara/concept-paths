@@ -1,7 +1,7 @@
 import logging
 import os
 
-def setup_logger(name=None, level=logging.WARNING, log_path="logs/app.log"):
+def setup_logger(name=None, level=logging.INFO, log_path="logs/app.log"):
     logger = logging.getLogger(name if name else __name__)
     if logger.handlers:
         return logger
