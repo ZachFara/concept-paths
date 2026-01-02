@@ -316,7 +316,7 @@ def main():
 
     config = Config('config/test.yaml')
 
-    data = AblationData(SENTIMENT_SENTENCES, SENTIMENT_WORDS, 4, SENTIMENT_ABLATION_TEMPLATE)
+    data = AblationData(SENTIMENT_SENTENCES, SENTIMENT_WORDS, 4, SENTIMENT_ABLATION_TEMPLATE, config = config)
     templated_sentences_df = data.get_templated_sentences(train_split = .8)
 
     ks = [0, 5, 10, 20, 40, 60, 80, 100]

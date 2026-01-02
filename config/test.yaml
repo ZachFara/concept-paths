@@ -9,8 +9,15 @@ top_ks:
 train_split: 0.8
 probe_epochs: 100
 n_boot: 1000
+random_seed: 0
+random_seeds:
+  - 0
+  - 1
+  - 2
+  - 3
+  - 4
 train:
   epochs: 100
   lr: 0.01
 paths:
-  outputs: outputs/ablation_results
+  outputs: outputs/test
