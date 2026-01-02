@@ -25484,3 +25484,305 @@
 0     pca    28  0.583333
 1  random    18  0.375000
 2  normal     2  0.041667
+2026-01-02 12:55:52,620 INFO __main__: Running ablations for seed=4
+2026-01-02 12:55:52,855 INFO src.ablate.ablationresults: Running ablation for k = 5
+2026-01-02 12:55:53,331 INFO src.ablate.ablators: This ablator will ablate: 0.65% of the neurons in this model
+2026-01-02 12:56:28,079 INFO src.ablate.ablationresults: Running ablation for k = 10
+2026-01-02 12:56:28,785 INFO src.ablate.ablators: This ablator will ablate: 1.30% of the neurons in this model
+2026-01-02 12:57:07,380 INFO src.ablate.ablationresults: Running ablation for k = 20
+2026-01-02 12:57:07,772 INFO src.ablate.ablators: This ablator will ablate: 2.60% of the neurons in this model
+2026-01-02 12:57:40,791 INFO src.ablate.ablationresults: Running ablation for k = 40
+2026-01-02 12:57:41,461 INFO src.ablate.ablators: This ablator will ablate: 5.21% of the neurons in this model
+2026-01-02 12:58:18,138 INFO src.ablate.ablationresults: Running ablation for k = 60
+2026-01-02 12:58:18,653 INFO src.ablate.ablators: This ablator will ablate: 7.81% of the neurons in this model
+2026-01-02 12:58:52,775 INFO src.ablate.ablationresults: Running ablation for k = 80
+2026-01-02 12:58:53,183 INFO src.ablate.ablators: This ablator will ablate: 10.42% of the neurons in this model
+2026-01-02 12:59:29,283 INFO src.ablate.ablationresults: Running ablation for k = 100
+2026-01-02 12:59:29,724 INFO src.ablate.ablators: This ablator will ablate: 13.02% of the neurons in this model
+2026-01-02 13:00:05,557 INFO __main__: Running ablations for seed=3
+2026-01-02 13:00:05,766 INFO src.ablate.ablationresults: Running ablation for k = 5
+2026-01-02 13:00:06,187 INFO src.ablate.ablators: This ablator will ablate: 0.65% of the neurons in this model
+2026-01-02 13:00:43,091 INFO src.ablate.ablationresults: Running ablation for k = 10
+2026-01-02 13:00:43,490 INFO src.ablate.ablators: This ablator will ablate: 1.30% of the neurons in this model
+2026-01-02 13:01:18,569 INFO src.ablate.ablationresults: Running ablation for k = 20
+2026-01-02 13:01:18,998 INFO src.ablate.ablators: This ablator will ablate: 2.60% of the neurons in this model
+2026-01-02 13:01:54,752 INFO src.ablate.ablationresults: Running ablation for k = 40
+2026-01-02 13:01:55,189 INFO src.ablate.ablators: This ablator will ablate: 5.21% of the neurons in this model
+2026-01-02 13:02:28,224 INFO src.ablate.ablationresults: Running ablation for k = 60
+2026-01-02 13:02:28,641 INFO src.ablate.ablators: This ablator will ablate: 7.81% of the neurons in this model
+2026-01-02 13:03:02,468 INFO src.ablate.ablationresults: Running ablation for k = 80
+2026-01-02 13:03:02,865 INFO src.ablate.ablators: This ablator will ablate: 10.42% of the neurons in this model
+2026-01-02 13:03:36,622 INFO src.ablate.ablationresults: Running ablation for k = 100
+2026-01-02 13:03:37,006 INFO src.ablate.ablators: This ablator will ablate: 13.02% of the neurons in this model
+2026-01-02 13:04:13,733 INFO __main__: Running ablations for seed=2
+2026-01-02 13:04:14,047 INFO src.ablate.ablationresults: Running ablation for k = 5
+2026-01-02 13:04:14,442 INFO src.ablate.ablators: This ablator will ablate: 0.65% of the neurons in this model
+2026-01-02 13:04:46,866 INFO src.ablate.ablationresults: Running ablation for k = 10
+2026-01-02 13:04:47,600 INFO src.ablate.ablators: This ablator will ablate: 1.30% of the neurons in this model
+2026-01-02 13:05:39,527 INFO src.ablate.ablationresults: Running ablation for k = 20
+2026-01-02 13:05:39,996 INFO src.ablate.ablators: This ablator will ablate: 2.60% of the neurons in this model
+2026-01-02 13:06:19,023 INFO src.ablate.ablationresults: Running ablation for k = 40
+2026-01-02 13:06:19,451 INFO src.ablate.ablators: This ablator will ablate: 5.21% of the neurons in this model
+2026-01-02 13:06:58,206 INFO src.ablate.ablationresults: Running ablation for k = 60
+2026-01-02 13:06:58,667 INFO src.ablate.ablators: This ablator will ablate: 7.81% of the neurons in this model
+2026-01-02 13:07:33,649 INFO src.ablate.ablationresults: Running ablation for k = 80
+2026-01-02 13:07:34,081 INFO src.ablate.ablators: This ablator will ablate: 10.42% of the neurons in this model
+2026-01-02 13:08:21,925 INFO src.ablate.ablationresults: Running ablation for k = 100
+2026-01-02 13:08:22,373 INFO src.ablate.ablators: This ablator will ablate: 13.02% of the neurons in this model
+2026-01-02 13:09:07,082 INFO __main__: Running ablations for seed=1
+2026-01-02 13:09:07,488 INFO src.ablate.ablationresults: Running ablation for k = 5
+2026-01-02 13:09:07,942 INFO src.ablate.ablators: This ablator will ablate: 0.65% of the neurons in this model
+2026-01-02 13:10:02,501 INFO src.ablate.ablationresults: Running ablation for k = 10
+2026-01-02 13:10:02,951 INFO src.ablate.ablators: This ablator will ablate: 1.30% of the neurons in this model
+2026-01-02 13:10:41,851 INFO src.ablate.ablationresults: Running ablation for k = 20
+2026-01-02 13:10:42,282 INFO src.ablate.ablators: This ablator will ablate: 2.60% of the neurons in this model
+2026-01-02 13:11:21,932 INFO src.ablate.ablationresults: Running ablation for k = 40
+2026-01-02 13:11:22,346 INFO src.ablate.ablators: This ablator will ablate: 5.21% of the neurons in this model
+2026-01-02 13:11:58,489 INFO src.ablate.ablationresults: Running ablation for k = 60
+2026-01-02 13:11:58,918 INFO src.ablate.ablators: This ablator will ablate: 7.81% of the neurons in this model
+2026-01-02 13:12:42,297 INFO src.ablate.ablationresults: Running ablation for k = 80
+2026-01-02 13:12:42,729 INFO src.ablate.ablators: This ablator will ablate: 10.42% of the neurons in this model
+2026-01-02 13:13:21,576 INFO src.ablate.ablationresults: Running ablation for k = 100
+2026-01-02 13:13:22,027 INFO src.ablate.ablators: This ablator will ablate: 13.02% of the neurons in this model
+2026-01-02 13:14:07,693 INFO __main__: Running ablations for seed=0
+2026-01-02 13:14:08,102 INFO src.ablate.ablationresults: Running ablation for k = 5
+2026-01-02 13:14:08,546 INFO src.ablate.ablators: This ablator will ablate: 0.65% of the neurons in this model
+2026-01-02 13:14:52,909 INFO src.ablate.ablationresults: Running ablation for k = 10
+2026-01-02 13:14:53,428 INFO src.ablate.ablators: This ablator will ablate: 1.30% of the neurons in this model
+2026-01-02 13:15:39,962 INFO src.ablate.ablationresults: Running ablation for k = 20
+2026-01-02 13:15:40,369 INFO src.ablate.ablators: This ablator will ablate: 2.60% of the neurons in this model
+2026-01-02 13:16:23,170 INFO src.ablate.ablationresults: Running ablation for k = 40
+2026-01-02 13:16:23,620 INFO src.ablate.ablators: This ablator will ablate: 5.21% of the neurons in this model
+2026-01-02 13:17:02,356 INFO src.ablate.ablationresults: Running ablation for k = 60
+2026-01-02 13:17:02,774 INFO src.ablate.ablators: This ablator will ablate: 7.81% of the neurons in this model
+2026-01-02 13:17:59,826 INFO src.ablate.ablationresults: Running ablation for k = 80
+2026-01-02 13:18:00,262 INFO src.ablate.ablators: This ablator will ablate: 10.42% of the neurons in this model
+2026-01-02 13:18:41,565 INFO src.ablate.ablationresults: Running ablation for k = 100
+2026-01-02 13:18:42,052 INFO src.ablate.ablators: This ablator will ablate: 13.02% of the neurons in this model
+2026-01-02 13:19:28,598 INFO __main__: Best method summary for seed=4:
+   method  wins  win_rate
+0     pca    25  0.520833
+1  random    21  0.437500
+2  linear     2  0.041667
+2026-01-02 13:19:28,607 INFO __main__: Best method summary for seed=3:
+   method  wins  win_rate
+0     pca    25  0.520833
+1  random    23  0.479167
+2026-01-02 13:19:28,611 INFO __main__: Best method summary for seed=2:
+   method  wins  win_rate
+0     pca    25  0.520833
+1  random    22  0.458333
+2  normal     1  0.020833
+2026-01-02 13:19:28,616 INFO __main__: Best method summary for seed=1:
+   method  wins  win_rate
+0     pca    29  0.604167
+1  normal    10  0.208333
+2  linear     8  0.166667
+3  random     1  0.020833
+2026-01-02 13:19:28,628 INFO __main__: Best method summary for seed=0:
+   method  wins  win_rate
+0     pca    29  0.604167
+1  random    15  0.312500
+2  normal     4  0.083333
+2026-01-02 13:43:10,824 INFO __main__: Running ablations for seed=0
+2026-01-02 13:43:11,627 INFO src.ablate.ablationresults: Running ablation for k = 5
+2026-01-02 13:43:12,030 INFO src.ablate.ablators: This ablator will ablate: 0.65% of the neurons in this model
+2026-01-02 13:43:44,139 INFO src.ablate.ablationresults: Running ablation for k = 10
+2026-01-02 13:43:44,717 INFO src.ablate.ablators: This ablator will ablate: 1.30% of the neurons in this model
+2026-01-02 13:44:22,956 INFO src.ablate.ablationresults: Running ablation for k = 20
+2026-01-02 13:44:23,371 INFO src.ablate.ablators: This ablator will ablate: 2.60% of the neurons in this model
+2026-01-02 13:45:01,562 INFO src.ablate.ablationresults: Running ablation for k = 40
+2026-01-02 13:45:01,980 INFO src.ablate.ablators: This ablator will ablate: 5.21% of the neurons in this model
+2026-01-02 13:45:39,677 INFO src.ablate.ablationresults: Running ablation for k = 60
+2026-01-02 13:45:40,106 INFO src.ablate.ablators: This ablator will ablate: 7.81% of the neurons in this model
+2026-01-02 13:46:14,872 INFO src.ablate.ablationresults: Running ablation for k = 80
+2026-01-02 13:46:15,288 INFO src.ablate.ablators: This ablator will ablate: 10.42% of the neurons in this model
+2026-01-02 13:46:56,912 INFO src.ablate.ablationresults: Running ablation for k = 100
+2026-01-02 13:46:57,320 INFO src.ablate.ablators: This ablator will ablate: 13.02% of the neurons in this model
+2026-01-02 13:47:33,492 INFO __main__: Running ablations for seed=1
+2026-01-02 13:47:33,811 INFO src.ablate.ablationresults: Running ablation for k = 5
+2026-01-02 13:47:34,245 INFO src.ablate.ablators: This ablator will ablate: 0.65% of the neurons in this model
+2026-01-02 13:48:08,072 INFO src.ablate.ablationresults: Running ablation for k = 10
+2026-01-02 13:48:08,514 INFO src.ablate.ablators: This ablator will ablate: 1.30% of the neurons in this model
+2026-01-02 13:48:43,772 INFO src.ablate.ablationresults: Running ablation for k = 20
+2026-01-02 13:48:44,180 INFO src.ablate.ablators: This ablator will ablate: 2.60% of the neurons in this model
+2026-01-02 13:49:17,894 INFO src.ablate.ablationresults: Running ablation for k = 40
+2026-01-02 13:49:18,311 INFO src.ablate.ablators: This ablator will ablate: 5.21% of the neurons in this model
+2026-01-02 13:49:57,514 INFO src.ablate.ablationresults: Running ablation for k = 60
+2026-01-02 13:49:57,933 INFO src.ablate.ablators: This ablator will ablate: 7.81% of the neurons in this model
+2026-01-02 13:50:50,772 INFO src.ablate.ablationresults: Running ablation for k = 80
+2026-01-02 13:50:51,390 INFO src.ablate.ablators: This ablator will ablate: 10.42% of the neurons in this model
+2026-01-02 13:51:41,549 INFO src.ablate.ablationresults: Running ablation for k = 100
+2026-01-02 13:51:42,002 INFO src.ablate.ablators: This ablator will ablate: 13.02% of the neurons in this model
+2026-01-02 13:52:25,474 INFO __main__: Running ablations for seed=2
+2026-01-02 13:52:25,750 INFO src.ablate.ablationresults: Running ablation for k = 5
+2026-01-02 13:52:26,158 INFO src.ablate.ablators: This ablator will ablate: 0.65% of the neurons in this model
+2026-01-02 13:53:10,673 INFO src.ablate.ablationresults: Running ablation for k = 10
+2026-01-02 13:53:11,113 INFO src.ablate.ablators: This ablator will ablate: 1.30% of the neurons in this model
+2026-01-02 13:53:59,587 INFO src.ablate.ablationresults: Running ablation for k = 20
+2026-01-02 13:54:00,008 INFO src.ablate.ablators: This ablator will ablate: 2.60% of the neurons in this model
+2026-01-02 13:54:39,765 INFO src.ablate.ablationresults: Running ablation for k = 40
+2026-01-02 13:54:40,365 INFO src.ablate.ablators: This ablator will ablate: 5.21% of the neurons in this model
+2026-01-02 13:55:16,869 INFO src.ablate.ablationresults: Running ablation for k = 60
+2026-01-02 13:55:17,370 INFO src.ablate.ablators: This ablator will ablate: 7.81% of the neurons in this model
+2026-01-02 13:55:52,474 INFO src.ablate.ablationresults: Running ablation for k = 80
+2026-01-02 13:55:52,875 INFO src.ablate.ablators: This ablator will ablate: 10.42% of the neurons in this model
+2026-01-02 13:56:36,699 INFO src.ablate.ablationresults: Running ablation for k = 100
+2026-01-02 13:56:37,186 INFO src.ablate.ablators: This ablator will ablate: 13.02% of the neurons in this model
+2026-01-02 13:57:16,829 INFO __main__: Running ablations for seed=3
+2026-01-02 13:57:17,317 INFO src.ablate.ablationresults: Running ablation for k = 5
+2026-01-02 13:57:17,735 INFO src.ablate.ablators: This ablator will ablate: 0.65% of the neurons in this model
+2026-01-02 13:58:03,969 INFO src.ablate.ablationresults: Running ablation for k = 10
+2026-01-02 13:58:04,408 INFO src.ablate.ablators: This ablator will ablate: 1.30% of the neurons in this model
+2026-01-02 13:58:51,529 INFO src.ablate.ablationresults: Running ablation for k = 20
+2026-01-02 13:58:51,988 INFO src.ablate.ablators: This ablator will ablate: 2.60% of the neurons in this model
+2026-01-02 13:59:54,201 INFO src.ablate.ablationresults: Running ablation for k = 40
+2026-01-02 13:59:54,803 INFO src.ablate.ablators: This ablator will ablate: 5.21% of the neurons in this model
+2026-01-02 14:00:41,518 INFO src.ablate.ablationresults: Running ablation for k = 60
+2026-01-02 14:00:41,996 INFO src.ablate.ablators: This ablator will ablate: 7.81% of the neurons in this model
+2026-01-02 14:01:38,673 INFO src.ablate.ablationresults: Running ablation for k = 80
+2026-01-02 14:01:39,345 INFO src.ablate.ablators: This ablator will ablate: 10.42% of the neurons in this model
+2026-01-02 14:02:30,349 INFO src.ablate.ablationresults: Running ablation for k = 100
+2026-01-02 14:02:32,579 INFO src.ablate.ablators: This ablator will ablate: 13.02% of the neurons in this model
+2026-01-02 14:05:30,936 INFO __main__: Running ablations for seed=4
+2026-01-02 14:05:31,455 INFO src.ablate.ablationresults: Running ablation for k = 5
+2026-01-02 14:05:31,976 INFO src.ablate.ablators: This ablator will ablate: 0.65% of the neurons in this model
+2026-01-02 14:06:24,109 INFO src.ablate.ablationresults: Running ablation for k = 10
+2026-01-02 14:06:24,567 INFO src.ablate.ablators: This ablator will ablate: 1.30% of the neurons in this model
+2026-01-02 14:07:25,534 INFO src.ablate.ablationresults: Running ablation for k = 20
+2026-01-02 14:07:26,067 INFO src.ablate.ablators: This ablator will ablate: 2.60% of the neurons in this model
+2026-01-02 14:08:20,355 INFO src.ablate.ablationresults: Running ablation for k = 40
+2026-01-02 14:08:20,803 INFO src.ablate.ablators: This ablator will ablate: 5.21% of the neurons in this model
+2026-01-02 14:09:25,285 INFO src.ablate.ablationresults: Running ablation for k = 60
+2026-01-02 14:09:25,836 INFO src.ablate.ablators: This ablator will ablate: 7.81% of the neurons in this model
+2026-01-02 14:10:19,653 INFO src.ablate.ablationresults: Running ablation for k = 80
+2026-01-02 14:10:20,108 INFO src.ablate.ablators: This ablator will ablate: 10.42% of the neurons in this model
+2026-01-02 14:11:14,159 INFO src.ablate.ablationresults: Running ablation for k = 100
+2026-01-02 14:11:14,660 INFO src.ablate.ablators: This ablator will ablate: 13.02% of the neurons in this model
+2026-01-02 14:12:03,716 INFO __main__: Running ablations for seed=5
+2026-01-02 14:12:04,289 INFO src.ablate.ablationresults: Running ablation for k = 5
+2026-01-02 14:12:04,715 INFO src.ablate.ablators: This ablator will ablate: 0.65% of the neurons in this model
+2026-01-02 14:12:59,056 INFO src.ablate.ablationresults: Running ablation for k = 10
+2026-01-02 14:12:59,587 INFO src.ablate.ablators: This ablator will ablate: 1.30% of the neurons in this model
+2026-01-02 14:13:57,344 INFO src.ablate.ablationresults: Running ablation for k = 20
+2026-01-02 14:13:57,885 INFO src.ablate.ablators: This ablator will ablate: 2.60% of the neurons in this model
+2026-01-02 14:14:51,543 INFO src.ablate.ablationresults: Running ablation for k = 40
+2026-01-02 14:14:52,008 INFO src.ablate.ablators: This ablator will ablate: 5.21% of the neurons in this model
+2026-01-02 14:15:38,514 INFO src.ablate.ablationresults: Running ablation for k = 60
+2026-01-02 14:15:39,238 INFO src.ablate.ablators: This ablator will ablate: 7.81% of the neurons in this model
+2026-01-02 14:16:32,598 INFO src.ablate.ablationresults: Running ablation for k = 80
+2026-01-02 14:16:33,084 INFO src.ablate.ablators: This ablator will ablate: 10.42% of the neurons in this model
+2026-01-02 14:17:21,674 INFO src.ablate.ablationresults: Running ablation for k = 100
+2026-01-02 14:17:22,134 INFO src.ablate.ablators: This ablator will ablate: 13.02% of the neurons in this model
+2026-01-02 14:18:16,949 INFO __main__: Running ablations for seed=6
+2026-01-02 14:18:17,295 INFO src.ablate.ablationresults: Running ablation for k = 5
+2026-01-02 14:18:17,760 INFO src.ablate.ablators: This ablator will ablate: 0.65% of the neurons in this model
+2026-01-02 14:19:07,359 INFO src.ablate.ablationresults: Running ablation for k = 10
+2026-01-02 14:19:07,832 INFO src.ablate.ablators: This ablator will ablate: 1.30% of the neurons in this model
+2026-01-02 14:19:55,615 INFO src.ablate.ablationresults: Running ablation for k = 20
+2026-01-02 14:19:56,111 INFO src.ablate.ablators: This ablator will ablate: 2.60% of the neurons in this model
+2026-01-02 14:20:44,262 INFO src.ablate.ablationresults: Running ablation for k = 40
+2026-01-02 14:20:44,782 INFO src.ablate.ablators: This ablator will ablate: 5.21% of the neurons in this model
+2026-01-02 14:21:36,030 INFO src.ablate.ablationresults: Running ablation for k = 60
+2026-01-02 14:21:36,570 INFO src.ablate.ablators: This ablator will ablate: 7.81% of the neurons in this model
+2026-01-02 14:22:23,760 INFO src.ablate.ablationresults: Running ablation for k = 80
+2026-01-02 14:22:24,212 INFO src.ablate.ablators: This ablator will ablate: 10.42% of the neurons in this model
+2026-01-02 14:23:09,420 INFO src.ablate.ablationresults: Running ablation for k = 100
+2026-01-02 14:23:09,880 INFO src.ablate.ablators: This ablator will ablate: 13.02% of the neurons in this model
+2026-01-02 14:24:00,527 INFO __main__: Running ablations for seed=7
+2026-01-02 14:24:01,833 INFO src.ablate.ablationresults: Running ablation for k = 5
+2026-01-02 14:24:02,326 INFO src.ablate.ablators: This ablator will ablate: 0.65% of the neurons in this model
+2026-01-02 14:24:57,733 INFO src.ablate.ablationresults: Running ablation for k = 10
+2026-01-02 14:24:58,219 INFO src.ablate.ablators: This ablator will ablate: 1.30% of the neurons in this model
+2026-01-02 14:25:46,019 INFO src.ablate.ablationresults: Running ablation for k = 20
+2026-01-02 14:25:46,685 INFO src.ablate.ablators: This ablator will ablate: 2.60% of the neurons in this model
+2026-01-02 14:26:36,667 INFO src.ablate.ablationresults: Running ablation for k = 40
+2026-01-02 14:26:37,287 INFO src.ablate.ablators: This ablator will ablate: 5.21% of the neurons in this model
+2026-01-02 14:27:28,141 INFO src.ablate.ablationresults: Running ablation for k = 60
+2026-01-02 14:27:28,620 INFO src.ablate.ablators: This ablator will ablate: 7.81% of the neurons in this model
+2026-01-02 14:28:20,670 INFO src.ablate.ablationresults: Running ablation for k = 80
+2026-01-02 14:28:21,283 INFO src.ablate.ablators: This ablator will ablate: 10.42% of the neurons in this model
+2026-01-02 14:29:16,742 INFO src.ablate.ablationresults: Running ablation for k = 100
+2026-01-02 14:29:17,231 INFO src.ablate.ablators: This ablator will ablate: 13.02% of the neurons in this model
+2026-01-02 14:30:26,541 INFO __main__: Running ablations for seed=8
+2026-01-02 14:30:26,920 INFO src.ablate.ablationresults: Running ablation for k = 5
+2026-01-02 14:30:27,609 INFO src.ablate.ablators: This ablator will ablate: 0.65% of the neurons in this model
+2026-01-02 14:31:35,682 INFO src.ablate.ablationresults: Running ablation for k = 10
+2026-01-02 14:31:36,317 INFO src.ablate.ablators: This ablator will ablate: 1.30% of the neurons in this model
+2026-01-02 14:32:32,655 INFO src.ablate.ablationresults: Running ablation for k = 20
+2026-01-02 14:32:33,177 INFO src.ablate.ablators: This ablator will ablate: 2.60% of the neurons in this model
+2026-01-02 14:33:21,916 INFO src.ablate.ablationresults: Running ablation for k = 40
+2026-01-02 14:33:22,383 INFO src.ablate.ablators: This ablator will ablate: 5.21% of the neurons in this model
+2026-01-02 14:34:07,385 INFO src.ablate.ablationresults: Running ablation for k = 60
+2026-01-02 14:34:08,252 INFO src.ablate.ablators: This ablator will ablate: 7.81% of the neurons in this model
+2026-01-02 14:34:49,292 INFO src.ablate.ablationresults: Running ablation for k = 80
+2026-01-02 14:34:49,882 INFO src.ablate.ablators: This ablator will ablate: 10.42% of the neurons in this model
+2026-01-02 14:35:30,896 INFO src.ablate.ablationresults: Running ablation for k = 100
+2026-01-02 14:35:31,340 INFO src.ablate.ablators: This ablator will ablate: 13.02% of the neurons in this model
+2026-01-02 14:36:14,650 INFO __main__: Running ablations for seed=9
+2026-01-02 14:36:14,904 INFO src.ablate.ablationresults: Running ablation for k = 5
+2026-01-02 14:36:15,334 INFO src.ablate.ablators: This ablator will ablate: 0.65% of the neurons in this model
+2026-01-02 14:36:53,781 INFO src.ablate.ablationresults: Running ablation for k = 10
+2026-01-02 14:36:54,327 INFO src.ablate.ablators: This ablator will ablate: 1.30% of the neurons in this model
+2026-01-02 14:37:32,092 INFO src.ablate.ablationresults: Running ablation for k = 20
+2026-01-02 14:37:32,592 INFO src.ablate.ablators: This ablator will ablate: 2.60% of the neurons in this model
+2026-01-02 14:38:27,874 INFO src.ablate.ablationresults: Running ablation for k = 40
+2026-01-02 14:38:28,717 INFO src.ablate.ablators: This ablator will ablate: 5.21% of the neurons in this model
+2026-01-02 14:40:37,044 INFO src.ablate.ablationresults: Running ablation for k = 60
+2026-01-02 14:40:37,809 INFO src.ablate.ablators: This ablator will ablate: 7.81% of the neurons in this model
+2026-01-02 14:41:24,015 INFO src.ablate.ablationresults: Running ablation for k = 80
+2026-01-02 14:41:24,471 INFO src.ablate.ablators: This ablator will ablate: 10.42% of the neurons in this model
+2026-01-02 14:42:05,335 INFO src.ablate.ablationresults: Running ablation for k = 100
+2026-01-02 14:42:05,795 INFO src.ablate.ablators: This ablator will ablate: 13.02% of the neurons in this model
+2026-01-02 14:42:46,299 INFO __main__: Best method summary for seed=0:
+   method  wins  win_rate
+0     pca    29  0.604167
+1  random    15  0.312500
+2  normal     4  0.083333
+2026-01-02 14:42:46,305 INFO __main__: Best method summary for seed=1:
+   method  wins  win_rate
+0     pca    29  0.604167
+1  normal    10  0.208333
+2  linear     8  0.166667
+3  random     1  0.020833
+2026-01-02 14:42:46,309 INFO __main__: Best method summary for seed=2:
+   method  wins  win_rate
+0     pca    25  0.520833
+1  random    22  0.458333
+2  normal     1  0.020833
+2026-01-02 14:42:46,314 INFO __main__: Best method summary for seed=3:
+   method  wins  win_rate
+0     pca    25  0.520833
+1  random    23  0.479167
+2026-01-02 14:42:46,318 INFO __main__: Best method summary for seed=4:
+   method  wins  win_rate
+0     pca    25  0.520833
+1  random    21  0.437500
+2  linear     2  0.041667
+2026-01-02 14:42:46,322 INFO __main__: Best method summary for seed=5:
+   method  wins  win_rate
+0     pca    31  0.645833
+1  random     9  0.187500
+2  linear     7  0.145833
+3  normal     1  0.020833
+2026-01-02 14:42:46,327 INFO __main__: Best method summary for seed=6:
+   method  wins  win_rate
+0     pca    27  0.562500
+1  random    19  0.395833
+2  normal     2  0.041667
+2026-01-02 14:42:46,331 INFO __main__: Best method summary for seed=7:
+   method  wins  win_rate
+0     pca    27  0.562500
+1  normal    17  0.354167
+2  linear     4  0.083333
+2026-01-02 14:42:46,335 INFO __main__: Best method summary for seed=8:
+   method  wins  win_rate
+0     pca    27  0.562500
+1  random    11  0.229167
+2  normal     9  0.187500
+3  linear     1  0.020833
+2026-01-02 14:42:46,339 INFO __main__: Best method summary for seed=9:
+   method  wins  win_rate
+0     pca    25  0.520833
+1  normal    21  0.437500
+2  random     2  0.041667
