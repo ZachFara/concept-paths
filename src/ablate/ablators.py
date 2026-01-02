@@ -10,6 +10,7 @@ from src.templates import SENTIMENT_SENTENCES, SENTIMENT_WORDS, SENTIMENT_ABLATI
 from src.deltas import Deltas
 from src.pca import PCA
 from src.ablate.ablationdata import AblationData
+from src.config import Config
 
 logger = setup_logger(__name__)
 
@@ -18,7 +19,9 @@ class GPT2Ablator:
                  data:AblationData,
                  top_k:int,
                  positive_string:str = " positive",
-                 negative_string:str = " negative"
+                 negative_string:str = " negative",
+                 config=None,
+                 seed=0,
                  ):
         self.model = GPT2(n = 10)
         self.llm = self.model.LLM
@@ -30,12 +33,18 @@ class GPT2Ablator:
         self.top_k = top_k
         self.positive_string = positive_string
         self.negative_string = negative_string
+        if config is not None:
+            self.seed = config.get("random_seed", 0)
+        else: 
+            self.seed = seed
         self.pos_id, self.neg_id = self.get_pos_neg_ids()
         self._pca_ablation_cache = {}
 
         logger.info(f"This ablator will ablate: {(self.top_k / self.n_neurons) * 100:.2f}% of the neurons in this model")
 
-    def random_ablation(self, prompt, seed = 0):
+    def random_ablation(self, prompt, seed = None):
+        if seed is None:
+            seed = self.seed
         tokenized = self.tokenizer(
             prompt,
             return_tensors="pt",
@@ -93,7 +102,9 @@ class GPT2Ablator:
 
         return df_with_resids
 
-    def train_linear_probes(self, df, epochs=200, lr=1e-2, seed=0):
+    def train_linear_probes(self, df, epochs=200, lr=1e-2, seed=None):
+        if seed is None:
+            seed = self.seed
 
         df = df.copy()
         df_with_resids = self.get_residual_activations(df)
@@ -225,7 +236,9 @@ class GPT2Ablator:
         logits = self.baseline_logits(prompt)
         return self.get_probas(logits)
 
-    def random_probas(self, prompt, seed=0):
+    def random_probas(self, prompt, seed=None):
+        if seed is None:
+            seed = self.seed
         logits = self.random_ablation(prompt, seed=seed)
         return self.get_probas(logits)
 
@@ -237,7 +250,9 @@ class GPT2Ablator:
         logits = self.pca_ablation_logits(prompt, pca_dict, top_k=top_k)
         return self.get_probas(logits)
 
-    def fill_test_df(self, df, pca_dict, seed=0, top_k=None):
+    def fill_test_df(self, df, pca_dict, seed=None, top_k=None):
+        if seed is None:
+            seed = self.seed
         df = df.copy()
         test_df = df[df["split"] == "TEST"].copy()
 
@@ -319,8 +334,9 @@ def rand_norm_linear_single_prompt():
         )
 
 def main():
+    config = Config("config/test.yaml")
     data = AblationData(SENTIMENT_SENTENCES, SENTIMENT_WORDS, 4, SENTIMENT_ABLATION_TEMPLATE)
-    ablator = GPT2Ablator(data, 10)
+    ablator = GPT2Ablator(data, 10, config = config)
     templated_sentences_df = data.get_templated_sentences(train_split = .8)
     
     ablator.train_linear_probes(templated_sentences_df, epochs=100)

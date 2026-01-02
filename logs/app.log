@@ -25327,3 +25327,57 @@
 0  normal    21  0.437500
 1     pca    19  0.395833
 2  random     8  0.166667
+2026-01-02 00:35:20,972 INFO __main__: Running ablation for k = 0
+2026-01-02 00:35:21,394 INFO src.ablate.ablators: This ablator will ablate: 0.00% of the neurons in this model
+2026-01-02 00:35:53,424 INFO __main__: Running ablation for k = 5
+2026-01-02 00:35:53,822 INFO src.ablate.ablators: This ablator will ablate: 0.65% of the neurons in this model
+2026-01-02 00:36:34,811 INFO __main__: Running ablation for k = 10
+2026-01-02 00:36:35,563 INFO src.ablate.ablators: This ablator will ablate: 1.30% of the neurons in this model
+2026-01-02 00:37:13,559 INFO __main__: Running ablation for k = 20
+2026-01-02 00:37:14,110 INFO src.ablate.ablators: This ablator will ablate: 2.60% of the neurons in this model
+2026-01-02 00:37:52,117 INFO __main__: Running ablation for k = 40
+2026-01-02 00:37:52,528 INFO src.ablate.ablators: This ablator will ablate: 5.21% of the neurons in this model
+2026-01-02 00:38:36,646 INFO __main__: Running ablation for k = 60
+2026-01-02 00:38:37,083 INFO src.ablate.ablators: This ablator will ablate: 7.81% of the neurons in this model
+2026-01-02 00:39:23,638 INFO __main__: Running ablation for k = 80
+2026-01-02 00:39:24,067 INFO src.ablate.ablators: This ablator will ablate: 10.42% of the neurons in this model
+2026-01-02 00:40:02,444 INFO __main__: Running ablation for k = 100
+2026-01-02 00:40:02,856 INFO src.ablate.ablators: This ablator will ablate: 13.02% of the neurons in this model
+2026-01-02 00:40:41,590 INFO __main__: Best method summary for k=0:
+   method  wins  win_rate
+0  linear    48       1.0
+2026-01-02 00:40:41,599 INFO __main__: Best method summary for k=5:
+   method  wins  win_rate
+0     pca    29  0.604167
+1  random    15  0.312500
+2  normal     4  0.083333
+2026-01-02 00:40:41,603 INFO __main__: Best method summary for k=10:
+   method  wins  win_rate
+0     pca    25  0.520833
+1  random    21  0.437500
+2  normal     2  0.041667
+2026-01-02 00:40:41,609 INFO __main__: Best method summary for k=20:
+   method  wins  win_rate
+0     pca    25  0.520833
+1  random    21  0.437500
+2  normal     2  0.041667
+2026-01-02 00:40:41,616 INFO __main__: Best method summary for k=40:
+   method  wins  win_rate
+0     pca    21  0.437500
+1  random    19  0.395833
+2  normal     8  0.166667
+2026-01-02 00:40:41,624 INFO __main__: Best method summary for k=60:
+   method  wins  win_rate
+0  random    17  0.354167
+1     pca    16  0.333333
+2  normal    15  0.312500
+2026-01-02 00:40:41,627 INFO __main__: Best method summary for k=80:
+   method  wins  win_rate
+0  random    24  0.500000
+1     pca    20  0.416667
+2  normal     4  0.083333
+2026-01-02 00:40:41,631 INFO __main__: Best method summary for k=100:
+   method  wins  win_rate
+0  normal    21  0.437500
+1     pca    19  0.395833
+2  random     8  0.166667

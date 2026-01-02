@@ -8,17 +8,22 @@ from src.pca import PCA
 from src.templates import SENTIMENT_SENTENCES, SENTIMENT_WORDS, Template, SENTIMENT_ABLATION_TEMPLATE
 from src.deltas import Deltas
 from src.pca import PCA
+from src.config import Config
 
 logger = setup_logger(__name__)
 
 
 class AblationData:
-    def __init__(self, sentences, words, cutoff, template=None):
+    def __init__(self, sentences, words, cutoff, template=None, config=None, seed=0):
         """Cutoff is the number of bottom levels treated as negative and top levels treated as positive."""
         self.sentences = sentences
         self.words = words
         self.cutoff = int(cutoff)
         self.template = template
+        if config is not None:
+            self.seed = config.get("random_seed", 0)
+        else:
+            self.seed = seed
         self._validate()
 
     def _validate(self):
@@ -51,7 +56,9 @@ class AblationData:
             "positive": positive,
         }
 
-    def get_labeled_sentences(self, train_split=0.8, split_by="sentence_id", seed=0):
+    def get_labeled_sentences(self, train_split=0.8, split_by="sentence_id", seed=None):
+        if seed is None:
+            seed = self.seed
         groups = self.get_level_groups()
         sentence_keys = self._sorted_sentence_keys()
         if split_by != "sentence_id":
@@ -103,7 +110,9 @@ class AblationData:
         return df
 
 def main():
-    data = AblationData(SENTIMENT_SENTENCES, SENTIMENT_WORDS, 4, template = SENTIMENT_ABLATION_TEMPLATE)
+    config = Config("config/test.yaml")
+    data = AblationData(SENTIMENT_SENTENCES, SENTIMENT_WORDS, 4,
+                        template = SENTIMENT_ABLATION_TEMPLATE, config = config)
     templated_sentences_df = data.get_templated_sentences()
     print(templated_sentences_df)
 

@@ -15,6 +15,7 @@ from src.deltas import Deltas
 from src.pca import PCA
 from src.ablate.ablationdata import AblationData
 from src.ablate.ablators import GPT2Ablator
+from src.config import Config
 
 logger = setup_logger(__name__)
 
@@ -28,6 +29,8 @@ class AblationResults:
         results: Optional[Dict[int, pd.DataFrame]] = None,
         ablator: GPT2Ablator = None,
         df: Optional[pd.DataFrame] = None,
+        config=None,
+        seed=0,
     ):
 
         # TODO: Make the function signature use a different type hint for ablator. It should be something more general
@@ -36,6 +39,10 @@ class AblationResults:
         self.results = results or {}
         self.ablator = ablator
         self.df = df
+        if config is not None:
+            self.seed = config.get("random_seed", 0)
+        else:
+            self.seed = seed
         if self.ablator is None:
             logger.info("AblationResults instance loaded without ablator. This will cause a crash if we attempt to gather the results without an ablator")
 
@@ -79,10 +86,12 @@ class AblationResults:
         method_b="random",
         n_boot=1000,
         n_perm=1000,
-        seed=0,
+        seed=None,
         eps=1e-9,
         df: Optional[pd.DataFrame] = None,
     ) -> pd.DataFrame:
+        if seed is None:
+            seed = self.seed
         df = self._get_df(df).copy()
 
         def binom_cdf(k, n, p):
@@ -219,9 +228,11 @@ class AblationResults:
         metric="nll",
         methods: Optional[List[str]] = None,
         n_boot=1000,
-        seed=0,
+        seed=None,
         eps=1e-9,
     ) -> pd.DataFrame:
+        if seed is None:
+            seed = self.seed
         if not self.results:
             raise ValueError("No results available to summarize over k")
         rng = torch.Generator().manual_seed(int(seed))
@@ -303,12 +314,14 @@ class AblationResults:
 
 def main():
 
+    config = Config('config/test.yaml')
+
     data = AblationData(SENTIMENT_SENTENCES, SENTIMENT_WORDS, 4, SENTIMENT_ABLATION_TEMPLATE)
     templated_sentences_df = data.get_templated_sentences(train_split = .8)
 
     ks = [0, 5, 10, 20, 40, 60, 80, 100]
 
-    results = AblationResults(df = templated_sentences_df, top_ks = ks, ablator=GPT2Ablator)
+    results = AblationResults(df = templated_sentences_df, top_ks = ks, ablator=GPT2Ablator, config = config)
 
     # Gather the deltas
     temp = Template(SENTIMENT_SENTENCES, SENTIMENT_WORDS)
