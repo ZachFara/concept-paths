@@ -95,11 +95,19 @@ class AblationData:
                         )
         return pd.DataFrame(rows)
 
-    def get_templated_sentences(self, train_split=0.8, template=None) -> pd.DataFrame:
+    def get_templated_sentences(
+        self,
+        train_split=0.8,
+        template=None,
+        seed=None,
+    ) -> pd.DataFrame:
 
         # TODO: Potentially add a cache here in case we call it a couple of times that way it won't recompute it every time
+
+        if seed is None:
+            seed = self.seed
         
-        df = self.get_labeled_sentences(train_split=train_split)
+        df = self.get_labeled_sentences(train_split=train_split, seed=seed)
         df = df.copy()
         template = template or self.template
         if not template:

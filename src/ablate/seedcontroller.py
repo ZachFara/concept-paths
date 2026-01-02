@@ -55,18 +55,20 @@ class SeedController:
         deltas_adj: pd.DataFrame,
         templated_sentences_df: Optional[pd.DataFrame] = None,
     ) -> Dict[int, AblationResults]:
-        if templated_sentences_df is None:
-            templated_sentences_df = data.get_templated_sentences()
 
         for seed in self.seeds:
             logger.info("Running ablations for seed=%s", seed)
+            if templated_sentences_df is None:
+                seed_df = data.get_templated_sentences(seed=seed)
+            else:
+                seed_df = templated_sentences_df
             ablator_factory = lambda d, k, s=seed: self.ablator_cls(d, k, seed=s)
             results = AblationResults(
                 top_ks=self.top_ks,
                 ablator=ablator_factory,
                 seed=seed,
             )
-            results.gather_results(data=data, deltas=deltas_adj, df=templated_sentences_df)
+            results.gather_results(data=data, deltas=deltas_adj, df=seed_df)
             self.results_by_seed[seed] = results
 
         return self.results_by_seed
@@ -200,8 +202,6 @@ def main():
         SENTIMENT_ABLATION_TEMPLATE,
         config=cfg,
     )
-    templated_sentences_df = data.get_templated_sentences(train_split=train_split)
-
     temp = Template(SENTIMENT_SENTENCES, SENTIMENT_WORDS)
     gpt = GPT2()
     df = temp.get_all_sentences()
@@ -220,7 +220,6 @@ def main():
     results_by_seed = controller.run(
         data=data,
         deltas_adj=deltas_adj,
-        templated_sentences_df=templated_sentences_df,
     )
 
     os.makedirs(out_dir, exist_ok=True)
@@ -263,4 +262,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
