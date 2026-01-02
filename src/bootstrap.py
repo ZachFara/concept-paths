@@ -7,11 +7,18 @@ from src.capture import GPT2
 from src.deltas import Deltas
 from src.stats import Stats
 from src.pca import PCA
+from src.config import Config
 
 class Bootstrap:
-    def __init__(self, deltas_adj_df, id_col="sentence_id"):
+    def __init__(self, deltas_adj_df, id_col="sentence_id", config = None, seed = 0):
         self.deltas_adj_df = deltas_adj_df
         self.id_col = id_col
+
+        if config is not None:
+            self.seed = config.get("random_seed", 0)
+        else:
+            self.seed = seed
+
 
     def _sample_ids(self, rng):
         ids = self.deltas_adj_df[self.id_col].unique()
@@ -22,7 +29,11 @@ class Bootstrap:
         parts = [self.deltas_adj_df[self.deltas_adj_df[self.id_col] == i] for i in sampled_ids]
         return pd.concat(parts, ignore_index=True)
 
-    def bootstrap_step_consistency(self, n_boot=100, seed=0):
+    def bootstrap_step_consistency(self, n_boot=100, seed = None):
+
+        if seed is None:
+            seed = self.seed
+
         rng = np.random.default_rng(seed)
         results = []
         for b in tqdm(range(n_boot), desc="bootstrap_step_consistency"):
@@ -32,7 +43,11 @@ class Bootstrap:
             results.append(analysis)
         return pd.concat(results, ignore_index=True) if results else pd.DataFrame()
 
-    def bootstrap_axis_consistency(self, n_boot=100, seed=0):
+    def bootstrap_axis_consistency(self, n_boot=100, seed = None):
+
+        if seed is None:
+            seed = self.seed
+
         rng = np.random.default_rng(seed)
         results = []
         for b in tqdm(range(n_boot), desc="bootstrap_axis_consistency"):
@@ -42,7 +57,11 @@ class Bootstrap:
             results.append(analysis)
         return pd.concat(results, ignore_index=True) if results else pd.DataFrame()
 
-    def bootstrap_pca_metrics(self, n_boot=100, seed=0, k_list=None, n_pc=10):
+    def bootstrap_pca_metrics(self, n_boot=100, seed = None, k_list=None, n_pc=10):
+
+        if seed is None:
+            seed = self.seed
+
         rng = np.random.default_rng(seed)
         results = []
         for b in tqdm(range(n_boot), desc="bootstrap_pca_metrics"):
@@ -54,7 +73,11 @@ class Bootstrap:
             results.append(analysis)
         return pd.concat(results, ignore_index=True) if results else pd.DataFrame()
 
-    def bootstrap_principal_angles(self, n_boot=100, seed=0, k=5, variance_threshold=None):
+    def bootstrap_principal_angles(self, n_boot=100, seed = None, k=5, variance_threshold=None):
+
+        if seed is None:
+            seed = self.seed
+
         rng = np.random.default_rng(seed)
         results = []
         for b in tqdm(range(n_boot), desc="bootstrap_principal_angles"):
@@ -66,7 +89,11 @@ class Bootstrap:
             results.append(analysis)
         return pd.concat(results, ignore_index=True) if results else pd.DataFrame()
 
-    def bootstrap_procrustes_alignment(self, n_boot=100, seed=0, k=5, variance_threshold=None):
+    def bootstrap_procrustes_alignment(self, n_boot=100, seed = None, k=5, variance_threshold=None):
+
+        if seed is None:
+            seed = self.seed
+
         rng = np.random.default_rng(seed)
         results = []
         for b in tqdm(range(n_boot), desc="bootstrap_procrustes_alignment"):
@@ -81,12 +108,16 @@ class Bootstrap:
     def bootstrap_everything(
         self,
         n_boot=100,
-        seed=0,
+        seed = None,
         k_list=None,
         n_pc=10,
         k_rotation=5,
         variance_threshold=0.9,
     ):
+
+        if seed is None:
+            seed = self.seed
+
         rng = np.random.default_rng(seed)
         outputs = {
             "step_consistency": [],
@@ -138,6 +169,9 @@ class Bootstrap:
         }
 
 def main():
+
+    config = Config("config/test.yaml")
+
     gpt = GPT2()
 
     sentiment_df = Template(SENTIMENT_SENTENCES, SENTIMENT_WORDS).get_all_sentences()
@@ -162,51 +196,51 @@ def main():
         null_mu, ["sentence_id", "layer"]
     )
 
-    sentiment_boot = Bootstrap(sentiment_deltas_adj)
-    null_boot = Bootstrap(null_deltas_adj)
+    sentiment_boot = Bootstrap(sentiment_deltas_adj, config = config)
+    null_boot = Bootstrap(null_deltas_adj, config = config)
 
     sentiment_boot.bootstrap_step_consistency().to_csv(
-        "outputs/step_consistency_bootstrap.csv", index=False
+        "outputs/test/step_consistency_bootstrap.csv", index=False
     )
     sentiment_boot.bootstrap_axis_consistency().to_csv(
-        "outputs/axis_consistency_bootstrap.csv", index=False
+        "outputs/test/axis_consistency_bootstrap.csv", index=False
     )
     sentiment_boot.bootstrap_pca_metrics().to_csv(
-        "outputs/pca_metrics_bootstrap.csv", index=False
+        "outputs/test/pca_metrics_bootstrap.csv", index=False
     )
     sentiment_boot.bootstrap_principal_angles(k=5).to_csv(
-        "outputs/pca_angles_bootstrap_k5.csv", index=False
+        "outputs/test/pca_angles_bootstrap_k5.csv", index=False
     )
     sentiment_boot.bootstrap_principal_angles(variance_threshold=0.9).to_csv(
-        "outputs/pca_angles_bootstrap_var90.csv", index=False
+        "outputs/test/pca_angles_bootstrap_var90.csv", index=False
     )
     sentiment_boot.bootstrap_procrustes_alignment(k=5).to_csv(
-        "outputs/pca_procrustes_bootstrap_k5.csv", index=False
+        "outputs/test/pca_procrustes_bootstrap_k5.csv", index=False
     )
     sentiment_boot.bootstrap_procrustes_alignment(variance_threshold=0.9).to_csv(
-        "outputs/pca_procrustes_bootstrap_var90.csv", index=False
+        "outputs/test/pca_procrustes_bootstrap_var90.csv", index=False
     )
 
     null_boot.bootstrap_step_consistency().to_csv(
-        "outputs/null_step_consistency_bootstrap.csv", index=False
+        "outputs/test/null_step_consistency_bootstrap.csv", index=False
     )
     null_boot.bootstrap_axis_consistency().to_csv(
-        "outputs/null_axis_consistency_bootstrap.csv", index=False
+        "outputs/test/null_axis_consistency_bootstrap.csv", index=False
     )
     null_boot.bootstrap_pca_metrics().to_csv(
-        "outputs/null_pca_metrics_bootstrap.csv", index=False
+        "outputs/test/null_pca_metrics_bootstrap.csv", index=False
     )
     null_boot.bootstrap_principal_angles(k=5).to_csv(
-        "outputs/null_pca_angles_bootstrap_k5.csv", index=False
+        "outputs/test/null_pca_angles_bootstrap_k5.csv", index=False
     )
     null_boot.bootstrap_principal_angles(variance_threshold=0.9).to_csv(
-        "outputs/null_pca_angles_bootstrap_var90.csv", index=False
+        "outputs/test/null_pca_angles_bootstrap_var90.csv", index=False
     )
     null_boot.bootstrap_procrustes_alignment(k=5).to_csv(
-        "outputs/null_pca_procrustes_bootstrap_k5.csv", index=False
+        "outputs/test/null_pca_procrustes_bootstrap_k5.csv", index=False
     )
     null_boot.bootstrap_procrustes_alignment(variance_threshold=0.9).to_csv(
-        "outputs/null_pca_procrustes_bootstrap_var90.csv", index=False
+        "outputs/test/null_pca_procrustes_bootstrap_var90.csv", index=False
     )
 
 if __name__ == "__main__":

@@ -7,7 +7,9 @@ TODOs:
         - `stats.py`
         - `plots.py`
         - `templates.py`
-        - 
+        - `compare.py`
+        - `bootstrap.py`
+
     - DONE! Create a script which runs everything end to end 
     - DONE! Implement another LLM
     - DONE! Implement another axis besides sentiment
