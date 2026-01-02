@@ -2,6 +2,8 @@ import os
 import numpy as np
 import pandas as pd
 
+from src.config import Config
+
 K_LIST = [85, 90, 95]
 
 
@@ -130,50 +132,53 @@ def _fdr_bh(pvals):
 
 def main():
     os.makedirs("outputs", exist_ok=True)
+    cfg = Config("config/test.yaml")
+    seed = getattr(cfg, "seed", 0)
+    n_boot = getattr(cfg, "n_boot", 1000)
 
     configs = [
         {
             "name": "step_consistency",
-            "alt_path": "outputs/data/bootstrap/step_consistency_bootstrap.csv",
-            "null_path": "outputs/data/bootstrap/null_step_consistency_bootstrap.csv",
+            "alt_path": "outputs/gpt/sentiment/data/bootstrap/step_consistency_bootstrap.csv",
+            "null_path": "outputs/gpt/sentiment/data/bootstrap/null_step_consistency_bootstrap.csv",
             "group_cols": ["layer", "level_from", "level_to"],
             "metric_cols": ["G"],
         },
         {
             "name": "axis_consistency",
-            "alt_path": "outputs/data/bootstrap/axis_consistency_bootstrap.csv",
-            "null_path": "outputs/data/bootstrap/null_axis_consistency_bootstrap.csv",
+            "alt_path": "outputs/gpt/sentiment/data/bootstrap/axis_consistency_bootstrap.csv",
+            "null_path": "outputs/gpt/sentiment/data/bootstrap/null_axis_consistency_bootstrap.csv",
             "group_cols": ["layer"],
             "metric_cols": ["G"],
         },
         {
             "name": "pca_metrics",
-            "alt_path": "outputs/data/bootstrap/pca_metrics_bootstrap.csv",
-            "null_path": "outputs/data/bootstrap/null_pca_metrics_bootstrap.csv",
+            "alt_path": "outputs/gpt/sentiment/data/bootstrap/pca_metrics_bootstrap.csv",
+            "null_path": "outputs/gpt/sentiment/data/bootstrap/null_pca_metrics_bootstrap.csv",
             "group_cols": ["layer"],
             "metric_cols": _pc_cols(10) + _k_cols(K_LIST),
         },
         {
-            "name": "pca_angles_k5", "alt_path": "outputs/data/bootstrap/pca_angles_bootstrap_k5.csv", "null_path": "outputs/data/bootstrap/null_pca_angles_bootstrap_k5.csv", "group_cols": ["layer_from", "layer_to"], "metric_cols": ["mean_angle", "max_angle"],
+            "name": "pca_angles_k5", "alt_path": "outputs/gpt/sentiment/data/bootstrap/pca_angles_bootstrap_k5.csv", "null_path": "outputs/gpt/sentiment/data/bootstrap/null_pca_angles_bootstrap_k5.csv", "group_cols": ["layer_from", "layer_to"], "metric_cols": ["mean_angle", "max_angle"],
         },
         {
             "name": "pca_angles_var90",
-            "alt_path": "outputs/data/bootstrap/pca_angles_bootstrap_var90.csv",
-            "null_path": "outputs/data/bootstrap/null_pca_angles_bootstrap_var90.csv",
+            "alt_path": "outputs/gpt/sentiment/data/bootstrap/pca_angles_bootstrap_var90.csv",
+            "null_path": "outputs/gpt/sentiment/data/bootstrap/null_pca_angles_bootstrap_var90.csv",
             "group_cols": ["layer_from", "layer_to"],
             "metric_cols": ["mean_angle", "max_angle", "k_used"],
         },
         {
             "name": "pca_procrustes_k5",
-            "alt_path": "outputs/data/bootstrap/pca_procrustes_bootstrap_k5.csv",
-            "null_path": "outputs/data/bootstrap/null_pca_procrustes_bootstrap_k5.csv",
+            "alt_path": "outputs/gpt/sentiment/data/bootstrap/pca_procrustes_bootstrap_k5.csv",
+            "null_path": "outputs/gpt/sentiment/data/bootstrap/null_pca_procrustes_bootstrap_k5.csv",
             "group_cols": ["layer_from", "layer_to"],
             "metric_cols": ["residual_fro"],
         },
         {
             "name": "pca_procrustes_var90",
-            "alt_path": "outputs/data/bootstrap/pca_procrustes_bootstrap_var90.csv",
-            "null_path": "outputs/data/bootstrap/null_pca_procrustes_bootstrap_var90.csv",
+            "alt_path": "outputs/gpt/sentiment/data/bootstrap/pca_procrustes_bootstrap_var90.csv",
+            "null_path": "outputs/gpt/sentiment/data/bootstrap/null_pca_procrustes_bootstrap_var90.csv",
             "group_cols": ["layer_from", "layer_to"],
             "metric_cols": ["residual_fro", "k_used"],
         },
@@ -187,10 +192,10 @@ def main():
         out_df = comp.compare_bootstrap(
             metric_cols=cfg["metric_cols"],
             group_cols=cfg["group_cols"],
-            n_boot=1000,
-            seed=0,
+            n_boot=n_boot,
+            seed=seed,
         )
-        output_path = f"outputs/data/comparison/compare_{cfg['name']}.csv"
+        output_path = f"outputs/test/compare_{cfg['name']}.csv"
         out_df.to_csv(output_path, index=False)
         print(f"Saved: {output_path}")
         if out_df.empty:
