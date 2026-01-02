@@ -67,6 +67,7 @@ class AblationData:
             raise ValueError("train_split must be between 0 and 1")
 
         rng = torch.Generator().manual_seed(int(seed))
+        logger.debug(f"Getting train/test split with seed = {seed}")
         indices = torch.randperm(len(sentence_keys), generator=rng).tolist()
         split_idx = int(round(len(sentence_keys) * train_split))
         train_ids = set(sentence_keys[i] for i in indices[:split_idx])
