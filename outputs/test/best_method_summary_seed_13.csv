@@ -1,0 +1,4 @@
+method,wins,win_rate
+pca,30,0.625
+random,17,0.3541666666666667
+linear,1,0.020833333333333332
