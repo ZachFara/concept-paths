@@ -249,7 +249,8 @@ class AblationResults:
                     dtype=torch.float32,
                 ).clamp(min=eps)
                 if metric == "accuracy":
-                    sample_scores = (torch.tensor(pos) >= torch.tensor(neg)).float()
+                    pred_pos = torch.tensor(pos) >= torch.tensor(neg)
+                    sample_scores = (pred_pos == torch.tensor(is_pos)).float()
                 elif metric == "nll":
                     sample_scores = -torch.log(correct_prob)
                 else:
