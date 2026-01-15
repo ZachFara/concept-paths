@@ -7,7 +7,7 @@ if REPO_ROOT not in sys.path:
 
 from src.bootstrap import Bootstrap
 from src.capture import GPT2, Pythia
-from src.templates import Template, SENTIMENT_WORDS, SENTIMENT_SENTENCES, NULL_WORDS, FORMALITY_SENTENCES, FORMALITY_WORDS, POLITENESS_SENTENCES, POLITENESS_WORDS
+from src.templates import Template, SENTIMENT_WORDS, SENTIMENT_SENTENCES, NULL_WORDS, ABSTRACT_SENTENCES, ABSTRACT_WORDS, POLITENESS_SENTENCES, POLITENESS_WORDS
 from src.compare import Comparison
 from src.deltas import Deltas
 from src.pca import PCA
@@ -427,14 +427,14 @@ def run_everything(llm, sentences, words, output_path = "outputs"):
 def main():
 
     # GPT2 
-    run_everything(GPT2, SENTIMENT_SENTENCES, SENTIMENT_WORDS, output_path= "outputs/gpt/sentiment")
-    run_everything(GPT2, POLITENESS_SENTENCES, POLITENESS_WORDS, output_path= "outputs/gpt/politeness")
-    run_everything(GPT2, FORMALITY_SENTENCES, FORMALITY_WORDS, output_path= "outputs/gpt/formality")
+    # run_everything(GPT2, SENTIMENT_SENTENCES, SENTIMENT_WORDS, output_path= "outputs/gpt/sentiment")
+    # run_everything(GPT2, POLITENESS_SENTENCES, POLITENESS_WORDS, output_path= "outputs/gpt/politeness")
+    run_everything(GPT2, ABSTRACT_SENTENCES, ABSTRACT_WORDS, output_path= "outputs/gpt/abstraction")
     
     # Pythia
-    run_everything(Pythia, SENTIMENT_SENTENCES, SENTIMENT_WORDS, output_path= "outputs/pythia/sentiment")
-    run_everything(Pythia, POLITENESS_SENTENCES, POLITENESS_WORDS, output_path= "outputs/pythia/politeness")
-    run_everything(Pythia, FORMALITY_SENTENCES, FORMALITY_WORDS, output_path= "outputs/pythia/formality")
+    # run_everything(Pythia, SENTIMENT_SENTENCES, SENTIMENT_WORDS, output_path= "outputs/pythia/sentiment")
+    # run_everything(Pythia, POLITENESS_SENTENCES, POLITENESS_WORDS, output_path= "outputs/pythia/politeness")
+    run_everything(Pythia, ABSTRACT_SENTENCES, ABSTRACT_WORDS, output_path= "outputs/pythia/abstraction")
 
 if __name__ == "__main__":
     main()

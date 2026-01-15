@@ -67,30 +67,56 @@ POLITENESS_WORDS = {
         "level.10": ["deferential", "very polite", "exceptionally kind"],
 }
 
-FORMALITY_SENTENCES = {
-        "sentence.1": "The response was {filler}",
-        "sentence.2": "The reply felt {filler}",
-        "sentence.3": "The tone was {filler}",
-        "sentence.4": "The message came across as {filler}",
-        "sentence.5": "The wording seemed {filler}",
-        "sentence.6": "The phrasing was {filler}",
-        "sentence.7": "The comment sounded {filler}",
-        "sentence.8": "The remark was {filler}",
-        "sentence.9": "The note was {filler}",
-        "sentence.10": "The statement felt {filler}",
+# FORMALITY_SENTENCES = {
+#         "sentence.1": "The response was {filler}",
+#         "sentence.2": "The reply felt {filler}",
+#         "sentence.3": "The tone was {filler}",
+#         "sentence.4": "The message came across as {filler}",
+#         "sentence.5": "The wording seemed {filler}",
+#         "sentence.6": "The phrasing was {filler}",
+#         "sentence.7": "The comment sounded {filler}",
+#         "sentence.8": "The remark was {filler}",
+#         "sentence.9": "The note was {filler}",
+#         "sentence.10": "The statement felt {filler}",
+# }
+# 
+# FORMALITY_WORDS = {
+#         "level.1": ["casual", "informal", "relaxed"],
+#         "level.2": ["conversational", "laid-back", "everyday"],
+#         "level.3": ["plain", "simple", "direct"],
+#         "level.4": ["neutral", "straightforward", "standard"],
+#         "level.5": ["measured", "polished", "proper"],
+#         "level.6": ["formal", "professional", "businesslike"],
+#         "level.7": ["official", "ceremonial", "authoritative"],
+#         "level.8": ["prestigious", "dignified", "stately"],
+#         "level.9": ["elevated", "refined", "sophisticated"],
+#         "level.10": ["highly formal", "very formal", "extremely formal"],
+# }
+
+ABSTRACT_SENTENCES = {
+        "sentence.1": "The concept felt {filler}",
+        "sentence.2": "The idea was {filler}",
+        "sentence.3": "The description seemed {filler}",
+        "sentence.4": "The explanation was {filler}",
+        "sentence.5": "The notion sounded {filler}",
+        "sentence.6": "The account was {filler}",
+        "sentence.7": "The statement felt {filler}",
+        "sentence.8": "The summary seemed {filler}",
+        "sentence.9": "The framing was {filler}",
+        "sentence.10": "The characterization felt {filler}",
 }
 
-FORMALITY_WORDS = {
-        "level.1": ["casual", "informal", "relaxed"],
-        "level.2": ["conversational", "laid-back", "everyday"],
-        "level.3": ["plain", "simple", "direct"],
-        "level.4": ["neutral", "straightforward", "standard"],
-        "level.5": ["measured", "polished", "proper"],
-        "level.6": ["formal", "professional", "businesslike"],
-        "level.7": ["official", "ceremonial", "authoritative"],
-        "level.8": ["prestigious", "dignified", "stately"],
-        "level.9": ["elevated", "refined", "sophisticated"],
-        "level.10": ["highly formal", "very formal", "extremely formal"],
+ABSTRACT_WORDS = {
+        "level.1": ["abstract", "conceptual", "theoretical"],
+        "level.2": ["general", "broad", "high-level"],
+        "level.3": ["vague", "hazy", "diffuse"],
+        "level.4": ["ambiguous", "imprecise", "unspecified"],
+        "level.5": ["intangible", "notional", "idealized"],
+        "level.6": ["specific", "particular", "defined"],
+        "level.7": ["detailed", "explicit", "clear"],
+        "level.8": ["vivid", "descriptive", "illustrative"],
+        "level.9": ["tangible", "physical", "material"],
+        "level.10": ["concrete", "hands-on", "real-world"],
 }
 
 class Template:

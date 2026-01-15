@@ -78,11 +78,17 @@ class Deltas:
                 rows.append(row)
         return pd.DataFrame(rows)
 
-    def cache_deltas(self):
+    def cache_deltas(self, df, path):
 
-        # TODO: Complete this. Cache these things within a cache directory perhaps as a pickle file
+        df.to_csv(path)
 
-        pass
+        return None
+
+    def load_deltas(self, path):
+
+        df = pd.read_csv(path)
+
+        return df
 
 def main():
     per_layer = True  # set False to use only last layer

@@ -28,6 +28,7 @@ from src.deltas import Deltas
 from src.templates import SENTIMENT_SENTENCES, SENTIMENT_WORDS, Template, NULL_WORDS
 from src.pca import PCA
 from src.logs import setup_logger
+from src.config import Config
 
 logger = setup_logger(__name__)
 
@@ -35,10 +36,15 @@ logger = setup_logger(__name__)
 
 class Directions:
 
-    def __init__(self, deltas = None, pca_dict = None, top_k = 5):
+    def __init__(self, deltas = None, pca_dict = None, top_k = 5, config = None, seed = 0):
         self.deltas = deltas
         self.pca_dict = pca_dict
         self.top_k = top_k
+
+        if config:
+            self.seed = config.random_seed
+        else:
+            self.seed = seed
 
     def resolve_param(self, param, default):
         return default if param is None else param
@@ -126,23 +132,26 @@ class Directions:
 
         return float(np.mean(angles)), angles
 
-    def split_half_distances(
+    def bootstrap_distances(
         self,
         deltas,
         unit_col="sentence_id",
         n_boot=100,
-        seed=0,
+        seed=self.seed,
         top_k=None,
         sign_fix="prev",
     ):
         rng = np.random.default_rng(int(seed))
         unit_ids = np.array(sorted(deltas[unit_col].unique()))
+        n_units = len(unit_ids)
+        if n_units == 0:
+            return pd.DataFrame(columns=["distance"])
         rows = []
-        for _ in tqdm(range(int(n_boot)), desc="split-half", leave=False):
-            rng.shuffle(unit_ids)
-            mid = len(unit_ids) // 2
-            a_ids = set(unit_ids[:mid])
-            b_ids = set(unit_ids[mid:])
+        for _ in tqdm(range(int(n_boot)), desc="bootstrap", leave=False):
+            a_ids = rng.choice(unit_ids, size=n_units, replace=True)
+            b_ids = rng.choice(unit_ids, size=n_units, replace=True)
+            a_ids = set(a_ids.tolist())
+            b_ids = set(b_ids.tolist())
             df_a = deltas[deltas[unit_col].isin(a_ids)]
             df_b = deltas[deltas[unit_col].isin(b_ids)]
             dir_a = self.build_from_deltas(df_a, top_k=top_k, sign_fix=sign_fix)
@@ -157,7 +166,7 @@ class Directions:
         deltas_b,
         unit_col="sentence_id",
         n_perm=1000,
-        seed=0,
+        seed=self.seed,
         top_k=None,
         sign_fix="prev",
     ):
@@ -221,17 +230,19 @@ def main():
     pca = PCA(deltas_adj_null)
     pca_dict_null = pca.get_all_layer_pca(df = deltas_adj_null, n_components = 5)
 
-    direction = Directions()
+    config = Config("config/standard.yaml")
+
+    direction = Directions(config = config)
     directions_df_sentiment = direction.build(deltas_adj_sentiment, pca_dict_sentiment)
     directions_df_null = direction.build(deltas_adj_null, pca_dict_null)
     output = direction.trajectory_distance(directions_df_sentiment, directions_df_null)
     print(output)
 
-    within_sent = direction.split_half_distances(
-        deltas_adj_sentiment, unit_col="sentence_id", n_boot=200, seed=0
+    within_sent = direction.bootstrap_distances(
+        deltas_adj_sentiment, unit_col="sentence_id", n_boot=200
     )
-    within_null = direction.split_half_distances(
-        deltas_adj_null, unit_col="sentence_id", n_boot=200, seed=0
+    within_null = direction.bootstrap_distances(
+        deltas_adj_null, unit_col="sentence_id", n_boot=200
     )
     perm = direction.permutation_test_across(
         deltas_adj_sentiment, deltas_adj_null, unit_col="sentence_id", n_perm=500, seed=0
