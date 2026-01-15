@@ -1,0 +1,12 @@
+{
+  "model_id": null,
+  "concept_id": null,
+  "split_id": null,
+  "top_k": 5,
+  "sign_anchor": "mean_delta",
+  "trajectory_metrics": {
+    "adjacent_alignment_mean": 0.9338690042495728,
+    "cumulative_rotation": 3.9308950901031494,
+    "smoothness": 0.17741882801055908
+  }
+}
