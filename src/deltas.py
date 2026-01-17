@@ -3,6 +3,7 @@ import re
 import sys
 from typing import List, Optional
 
+import numpy as np
 import pandas as pd
 import torch
 
@@ -91,7 +92,30 @@ class Deltas:
 
         df = pd.read_csv(path)
 
+        if "delta" in df.columns:
+            df["delta"] = df["delta"].apply(self._parse_tensor_cell)
+
         return df
+
+    @staticmethod
+    def _parse_tensor_cell(value):
+        if isinstance(value, torch.Tensor):
+            return value
+        if isinstance(value, str):
+            text = value.strip()
+            if text.startswith("tensor(") and text.endswith(")"):
+                inner = text[len("tensor("):-1]
+                if ", dtype=" in inner:
+                    inner = inner.split(", dtype=")[0]
+                inner = inner.strip()
+                if inner.startswith("[") and inner.endswith("]"):
+                    inner = inner[1:-1]
+                arr = np.fromstring(inner, sep=",")
+                return torch.tensor(arr, dtype=torch.float32)
+            arr = np.fromstring(text, sep=",")
+            if arr.size > 0:
+                return torch.tensor(arr, dtype=torch.float32)
+        return value
 
 def main():
     per_layer = True  # set False to use only last layer
