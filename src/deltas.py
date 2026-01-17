@@ -19,8 +19,11 @@ logger = setup_logger(__name__)
 class Deltas:
     def __init__(self, df: pd.DataFrame):
         self.df = df
-        self.df["level"] = self.df["level_id"].apply(self.level_to_int)
-        self.ensure_hidden_last()
+        if df is not None:
+            self.df["level"] = self.df["level_id"].apply(self.level_to_int)
+            self.ensure_hidden_last()
+        else:
+            logger.debug(f"Input df to Deltas object is None in the constructor! Potential Danger.")
 
     @staticmethod
     def level_to_int(value) -> Optional[int]:
@@ -97,11 +100,15 @@ def main():
     temp = Template(SENTIMENT_SENTENCES, SENTIMENT_WORDS)
     gpt = GPT2()
 
-    df = temp.get_grid_sentences(
-        sentence_ids=[1, 2],
-        level_ids=[1, 2],
-        word_ids=[1, 2, 3],
-    )
+# We used to demosntrate that we could grab only a grid of sentences if we wanted
+#     df = temp.get_grid_sentences(
+#         sentence_ids=[1, 2],
+#         level_ids=[1, 2],
+#         word_ids=[1, 2, 3],
+#     )
+
+    # Now let's just grab everything and save it to the cache
+    df = temp.get_all_sentences()
 
     if per_layer:
         df = gpt.add_x_residuals_to_df(df)
@@ -115,7 +122,7 @@ def main():
     mu = deltas.compute_mu(group_cols)
     deltas_adj = deltas.compute_adjacent_deltas(mu, group_cols)
 
-    deltas_adj.to_pickle(output_path)
+    deltas.cache_deltas(deltas_adj, "cache/gpt2_sentiment_deltas.csv")
 
     hidden_unique = deltas.df["hidden_last"].nunique(dropna=False)
     print(f"mu rows: {len(mu)}")
@@ -123,7 +130,6 @@ def main():
     print(f"hidden_last unique count: {hidden_unique} / {len(deltas.df)}")
     if not deltas_adj.empty:
         print(f"delta tensor shape example: {tuple(deltas_adj['delta'].iloc[0].shape)}")
-    print(f"Saved: {output_path}")
 
 
 if __name__ == "__main__":
