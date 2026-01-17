@@ -36,6 +36,45 @@ class Concept:
         else:
             self.seed = 0
 
+    @staticmethod
+    def _stack_vectors(series: Iterable) -> np.ndarray:
+        vecs = []
+        for v in series:
+            if isinstance(v, str):
+                v = v.strip()
+                if v.startswith("tensor(") and v.endswith(")"):
+                    inner = v[len("tensor("):-1]
+                    if ", dtype=" in inner:
+                        inner = inner.split(", dtype=")[0]
+                    inner = inner.strip()
+                    if inner.startswith("[") and inner.endswith("]"):
+                        inner = inner[1:-1]
+                    v = np.fromstring(inner, sep=",")
+                else:
+                    v = np.fromstring(v, sep=",")
+            elif hasattr(v, "detach"):
+                v = v.detach().cpu().numpy()
+            else:
+                v = np.asarray(v)
+            vecs.append(v)
+        return np.stack(vecs, axis=0)
+
+    def _pca_basis(self, series: Iterable, k=1) -> np.ndarray:
+        X = self._stack_vectors(series)
+        pca = SklearnPCA(n_components=min(k, X.shape[0]))
+        pca.fit(X)
+        basis = pca.components_[:k]
+        norms = np.linalg.norm(basis, axis=1, keepdims=True) + 1e-8
+        return (basis / norms).astype(np.float32)
+
+    @staticmethod
+    def _subspace_similarity(U: np.ndarray, V: np.ndarray) -> float:
+        Uc = U.T
+        Vc = V.T
+        s = np.linalg.svd(Uc.T @ Vc, compute_uv=False)
+        s = np.clip(s, -1.0, 1.0)
+        return float(np.mean(s))
+
     def build_pca(self, deltas = None, n_components = None):
         if deltas is none:
             deltas = self.deltas
@@ -60,8 +99,30 @@ class Concept:
         test_df = deltas[~deltas[unit_col].isin(train_ids)].copy()
         return train_df, test_df
 
-    def construct_label_permutation_null(self):
-        pass
+    def recoverability_curve(
+        self,
+        train_df,
+        test_df,
+        k=1,
+        layer_col="layer",
+        delta_col="delta",
+    ):
+        layers = sorted(set(train_df[layer_col].unique()) & set(test_df[layer_col].unique()))
+        rows = []
+        for layer in layers:
+            train_layer = train_df[train_df[layer_col] == layer]
+            test_layer = test_df[test_df[layer_col] == layer]
+            if train_layer.empty or test_layer.empty:
+                continue
+            train_basis = self._pca_basis(train_layer[delta_col], k=k)
+            test_basis = self._pca_basis(test_layer[delta_col], k=k)
+            if k == 1:
+                sim = float(abs(np.dot(train_basis[0], test_basis[0])))
+            else:
+                sim = self._subspace_similarity(train_basis, test_basis)
+            rows.append({"layer": layer, "recoverability": sim})
+        return pd.DataFrame(rows)
+
 
 
 def main():
@@ -75,16 +136,12 @@ def main():
     concept = Concept(None, PCA)
     sentiment_train, sentiment_test = concept.train_test_split(sentiment_deltas_df) 
 
-    temp = Template(SENTIMENT_SENTENCES, NULL_WORDS)
-    gpt = GPT2()
-    df = temp.get_all_sentences()
-    df = gpt.add_x_residuals_to_df(df=df, x=None)
-    delta = Deltas(df)
-    group_cols = ["sentence_id", "layer"]
-    mu = delta.compute_mu(group_cols=group_cols)
-    deltas_adj_null = delta.compute_adjacent_deltas(mu, group_cols)
-    delta.cache_deltas("cache/gpt2_sentiment_null_deltas.csv")
-    sentiment_null_train, sentiment_null_train = concept.train_test_split(deltas_adj_null)
+    sentiment_null_deltas_df = deltas.load_deltas("cache/gpt2_sentiment_null_deltas.csv")
+    sentiment_null_train, sentiment_null_train = concept.train_test_split(sentiment_null_deltas_df)
+
+    sentiment_recovery_df = concept.recoverability_curve(train_df=sentiment_train, test_df=sentiment_test, delta_col="delta", k=1, layer_col="layer") 
+
+    print(sentiment_recovery_df)
     
 if __name__ == "__main__":
     main()
