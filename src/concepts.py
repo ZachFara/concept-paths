@@ -86,12 +86,14 @@ class Concept:
 
         return pca_dict
 
-    def train_test_split(self, deltas = None):
+    def train_test_split(self, deltas = None, seed = None):
         if deltas is None:
             deltas = self.deltas
+        if seed is None:
+            seed = self.seed
         unit_col = "sentence_id"
         sentence_ids = np.array(sorted(deltas[unit_col].unique()))
-        rng = np.random.default_rng(int(self.seed))
+        rng = np.random.default_rng(int(seed))
         rng.shuffle(sentence_ids)
         split_idx = int(round(len(sentence_ids) * self.train_split))
         train_ids = set(sentence_ids[:split_idx])
@@ -114,6 +116,7 @@ class Concept:
             test_layer = test_df[test_df[layer_col] == layer]
             if train_layer.empty or test_layer.empty:
                 continue
+            # Just compute the PCA and avoid any interaction with our PCA library
             train_basis = self._pca_basis(train_layer[delta_col], k=k)
             test_basis = self._pca_basis(test_layer[delta_col], k=k)
             if k == 1:
@@ -123,9 +126,92 @@ class Concept:
             rows.append({"layer": layer, "recoverability": sim})
         return pd.DataFrame(rows)
 
+    def bootstrap_recoverability(
+        self,
+        deltas=None,
+        k=1,
+        n_boot=100,
+        unit_col="sentence_id",
+        layer_col="layer",
+        delta_col="delta",
+        seed=None,
+    ):
+        if deltas is None:
+            deltas = self.deltas
+        if seed is None:
+            seed = self.seed
+        boot_seeds = np.random.SeedSequence(seed).spawn(n_boot)
+
+        all_results = []
+
+        for i in range(n_boot):
+            current_seed = int(boot_seeds[i].generate_state(1)[0])
+            train, test = self.train_test_split(deltas, current_seed)
+            curve = self.recoverability_curve(train, test, k = k)
+            curve['boot_id'] = i
+            all_results.append(curve)
+        results = pd.concat(all_results, ignore_index=True)
+        return results
+
+    def compare_bootstrap_dfs(
+        self,
+        df_a,
+        df_b,
+        layer_col="layer",
+        value_col="recoverability",
+        boot_col="boot_id",
+        n_perm=2000,
+        n_boot_ci=2000,
+        seed=None,
+    ):
+        if seed is None:
+            seed = self.seed
+        rng = np.random.default_rng(int(seed))
+
+        merged = df_a.merge(df_b, on=[layer_col, boot_col], suffixes=("_a", "_b"))
+        if merged.empty:
+            return pd.DataFrame()
+
+        rows = []
+        for layer, g in merged.groupby(layer_col):
+            vals = (g[f"{value_col}_a"] - g[f"{value_col}_b"]).to_numpy(dtype=np.float64)
+            n = len(vals)
+            if n < 2:
+                continue
+
+            obs_mean = float(np.mean(vals))
+
+            # permutation p-value (paired sign-flip)
+            perm_means = np.empty(int(n_perm), dtype=np.float64)
+            for j in range(int(n_perm)):
+                signs = rng.integers(0, 2, size=n) * 2 - 1
+                perm_means[j] = float(np.mean(vals * signs))
+            p_val = float((1 + np.sum(np.abs(perm_means) >= abs(obs_mean))) / (1 + len(perm_means)))
+
+            # bootstrap CI on mean difference (optional but recommended)
+            boot_means = np.empty(int(n_boot_ci), dtype=np.float64)
+            for j in range(int(n_boot_ci)):
+                idx = rng.integers(0, n, size=n)
+                boot_means[j] = float(np.mean(vals[idx]))
+            lo = float(np.quantile(boot_means, 0.025))
+            hi = float(np.quantile(boot_means, 0.975))
+
+            rows.append(
+                {
+                    layer_col: layer,
+                    "mean_diff": obs_mean,
+                    "ci_low": lo,
+                    "ci_high": hi,
+                    "p_value": p_val,
+                    "n": int(n),
+                    "n_perm": int(n_perm),
+                }
+            )
+
+        return pd.DataFrame(rows)
 
 
-def main():
+def demo_recoverability_curve():
     config = Config("config/standard.yaml")
 
     # Load our sentiment deltas without any recomputation
@@ -139,9 +225,34 @@ def main():
     sentiment_null_deltas_df = deltas.load_deltas("cache/gpt2_sentiment_null_deltas.csv")
     sentiment_null_train, sentiment_null_train = concept.train_test_split(sentiment_null_deltas_df)
 
-    sentiment_recovery_df = concept.recoverability_curve(train_df=sentiment_train, test_df=sentiment_test, delta_col="delta", k=1, layer_col="layer") 
+    sentiment_recovery_df = concept.recoverability_curve(train_df=sentiment_train,
+                                                     test_df=sentiment_test,
+                                                     delta_col="delta",
+                                                     k=1,
+                                                     layer_col="layer") 
 
-    print(sentiment_recovery_df)
+def main():
+    config = Config("config/standard.yaml")
+    deltas = Deltas(None)
+    sentiment_deltas_df = deltas.load_deltas("cache/gpt2_sentiment_deltas.csv")
+    sentiment_null_deltas_df = deltas.load_deltas("cache/gpt2_sentiment_null_deltas.csv")
+    concept = Concept(None, PCA, config = config) 
+    sentiment_boot = concept.bootstrap_recoverability(sentiment_deltas_df)
+    null_boot = concept.bootstrap_recoverability(sentiment_null_deltas_df)
+    result = concept.compare_bootstrap_dfs(sentiment_boot, null_boot)
+    print(result)
+
+    temp = Template(SENTIMENT_SENTENCES, SENTIMENT_WORDS, config = config)
+    df = temp.generate_all_permutation()
+    gpt = GPT2()
+    df = gpt.add_x_residuals_to_df(df)
+    deltas = Deltas(df)
+    group_cols = ["sentence_id", "layer"]
+    mu = deltas.compute_mu(group_cols)
+    deltas_adj = deltas.compute_adjacent_deltas(mu, group_cols)
+    label_permutation_boot = concept.bootstrap_recoverability(deltas= deltas_adj)
+    result_permutation = concept.compare_bootstrap_dfs(sentiment_boot, label_permutation_boot)
+    print(result_permutation)
     
 if __name__ == "__main__":
     main()

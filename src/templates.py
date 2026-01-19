@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 
 SENTIMENT_ABLATION_TEMPLATE = "Sentence: {sentence}. Sentiment (positive/negative):"
@@ -120,9 +121,18 @@ ABSTRACT_WORDS = {
 }
 
 class Template:
-    def __init__(self, sentence_dict:dict, words_dict:dict):
+    def __init__(self, sentence_dict:dict, words_dict:dict, config = None, seed = None):
         self.sentence_dict = sentence_dict
         self.words_dict = words_dict
+
+        STANDARD_SEED = 1
+        if seed is None:
+            if config is not None:
+                self.seed = config.random_seed
+            else:
+                self.seed = STANDARD_SEED
+        else:
+            self.seed = seed
 
     def get_sentence(
             self,
@@ -244,6 +254,23 @@ class Template:
                     )
         return pd.DataFrame(rows)
 
+    def generate_all_permutation(self, seed=None):
+        if seed is None:
+            seed = self.seed
+        rng = np.random.default_rng(int(seed))
+        level_keys = sorted(
+            self.words_dict.keys(),
+            key=lambda k: int(k.split(".")[1]),
+        )
+        permuted = level_keys.copy()
+        rng.shuffle(permuted)
+        permuted_words = {
+            level_key: self.words_dict[perm_key]
+            for level_key, perm_key in zip(level_keys, permuted)
+        }
+        temp = Template(self.sentence_dict, permuted_words)
+        return temp.get_all_sentences()
+
 
 def main():
     temp = Template(SENTIMENT_SENTENCES, SENTIMENT_WORDS)
@@ -259,6 +286,10 @@ def main():
     grid = temp.get_grid_sentences(sentence_ids=[1, 2], level_ids=[1], word_ids=[1, 2])
     print(grid)
 
+    print("Doing level permutation. Here it is!")
+    result = temp.generate_all_permutation(seed = 1)
+
+    print(result)
 
 if __name__ == "__main__":
     main()
