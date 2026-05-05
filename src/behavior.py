@@ -30,6 +30,25 @@ def fit_layerwise_ridge(
     return scores
 
 
+def fit_layerwise_ridge_held_out(
+    train_residual: np.ndarray,
+    train_labels: np.ndarray,
+    eval_residual: np.ndarray,
+    eval_labels: np.ndarray,
+    alpha: float = 1.0,
+) -> np.ndarray:
+    """Fit on train split, score on eval split — avoids in-sample inflation."""
+    n_layers = train_residual.shape[1]
+    scores = np.zeros((n_layers,), dtype=np.float32)
+    for l in range(n_layers):
+        model = Ridge(alpha=alpha)
+        model.fit(train_residual[:, l, :], train_labels)
+        pred = model.predict(eval_residual[:, l, :])
+        r, _ = spearmanr(pred, eval_labels)
+        scores[l] = r if np.isfinite(r) else 0.0
+    return scores
+
+
 def run_behavior(
     cfg: ExperimentConfig,
     *,
@@ -71,7 +90,11 @@ def run_behavior(
     labels_disc = np.array([s.level for s in samples_disc], dtype=np.float32)
     labels_eval = np.array([s.level for s in samples_eval], dtype=np.float32)
     scores_disc = fit_layerwise_ridge(cache_disc.residual, labels_disc, alpha=1.0)
-    scores_eval = fit_layerwise_ridge(cache_eval.residual, labels_eval, alpha=1.0)
+    scores_eval = fit_layerwise_ridge_held_out(
+        cache_disc.residual, labels_disc,
+        cache_eval.residual, labels_eval,
+        alpha=1.0,
+    )
     x = np.arange(scores_disc.shape[0])
     plot_curves_with_ci(
         x=x,

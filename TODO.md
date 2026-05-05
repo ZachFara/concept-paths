@@ -6,7 +6,7 @@
 
 - [x] **`transfer_matrix` uses sample index as label** — `src/specificity.py:186` sets `labels = np.arange(proj_flat.shape[0])` instead of actual ordinal concept levels from the samples. The clean -0.75 off-diagonal in the cross-concept heatmap is an artifact of this. Fix: extract real levels from the sample list. (`src/specificity.py:186`)
 
-- [ ] **Behavior probe scores on training data** — `src/behavior.py:73-74` fits Ridge on `cache_disc.residual` and calls `.predict()` on the same split. The Spearman scores are in-sample. Fix: fit on discovery, score on `cache_eval.residual` / `labels_eval`. (`src/behavior.py:73-74`)
+- [x] **Behavior probe scores on training data** — `src/behavior.py:73-74` fits Ridge on `cache_disc.residual` and calls `.predict()` on the same split. The Spearman scores are in-sample. Fix: fit on discovery, score on `cache_eval.residual` / `labels_eval`. (`src/behavior.py:73-74`)
 
 ## Unfinished / Visible Loose Ends
 
