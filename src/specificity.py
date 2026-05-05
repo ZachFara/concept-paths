@@ -183,7 +183,21 @@ def transfer_matrix(
             deltas_b = deltas[cb]  # [P, L, H]
             proj = deltas_b @ dir_avg  # [P, H]
             proj_flat = proj.mean(axis=1)  # [P]
-            labels = np.arange(proj_flat.shape[0], dtype=np.float32)
+            # Reconstruct pair labels in the same order as compute_deltas
+            # so each label aligns with its delta row.
+            by_tmpl: Dict[int, Dict[int, List[int]]] = {}
+            for idx, s in enumerate(samples_map[cb]):
+                by_tmpl.setdefault(s.template_id, {}).setdefault(s.level, []).append(idx)
+            pair_labels: List[float] = []
+            for level_map in by_tmpl.values():
+                max_lvl = max(level_map.keys())
+                for lvl in range(max_lvl):
+                    if lvl not in level_map or (lvl + 1) not in level_map:
+                        continue
+                    for _ in level_map[lvl]:
+                        for _ in level_map[lvl + 1]:
+                            pair_labels.append(float(lvl + 1))
+            labels = np.array(pair_labels, dtype=np.float32)
             r, _ = spearmanr(proj_flat, labels)
             mat[i, j] = float(r)
     return mat

@@ -4,7 +4,7 @@
 
 - [ ] **Ablation plots are flat zero** — `artifacts/ablation/sentiment__eval/dose_probe.png` and the behavior ablation bar chart both render at zero. Diagnose why: the hook in `src/adapters/gpt2.py` zeros `c_fc` output but layer 0 may be too early for the effect to propagate through the residual stream. Try ablating at layers 3–5 instead of layer 0. Confirm the paired effect (`drop_target - drop_random`) is non-zero before plotting. (`src/ablation.py`, `src/behavior.py`, `src/adapters/gpt2.py`)
 
-- [ ] **`transfer_matrix` uses sample index as label** — `src/specificity.py:186` sets `labels = np.arange(proj_flat.shape[0])` instead of actual ordinal concept levels from the samples. The clean -0.75 off-diagonal in the cross-concept heatmap is an artifact of this. Fix: extract real levels from the sample list. (`src/specificity.py:186`)
+- [x] **`transfer_matrix` uses sample index as label** — `src/specificity.py:186` sets `labels = np.arange(proj_flat.shape[0])` instead of actual ordinal concept levels from the samples. The clean -0.75 off-diagonal in the cross-concept heatmap is an artifact of this. Fix: extract real levels from the sample list. (`src/specificity.py:186`)
 
 - [ ] **Behavior probe scores on training data** — `src/behavior.py:73-74` fits Ridge on `cache_disc.residual` and calls `.predict()` on the same split. The Spearman scores are in-sample. Fix: fit on discovery, score on `cache_eval.residual` / `labels_eval`. (`src/behavior.py:73-74`)
 
