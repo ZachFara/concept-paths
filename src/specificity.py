@@ -125,19 +125,6 @@ def permutation_similarity(
     return null
 
 
-def cross_generalization(
-    dir_a: np.ndarray,
-    samples_b: List[Sample],
-    residual_b: np.ndarray,
-) -> float:
-    deltas_b = compute_deltas(samples_b, residual_b)
-    proj = deltas_b @ dir_a  # [P, H]?? wait deltas shape [P,L,H]
-    proj_layer = proj[:, dir_a.shape[0]-1] if proj.ndim==3 else proj  # safeguard
-    labels = np.array([s.level for s in samples_b[: proj_layer.shape[0]]], dtype=np.float32)
-    r, _ = spearmanr(proj_layer.flatten(), labels.flatten())
-    return float(r)
-
-
 def transfer_matrix(
     cfg: ExperimentConfig,
     *,

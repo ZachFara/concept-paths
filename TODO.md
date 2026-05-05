@@ -14,7 +14,7 @@
 
 - [ ] **`geometry.py` and `stimuli.py` are partially orphaned** — These form an older pipeline path superseded by `metrics.py` + `data.py`. `geometry_runner.py` calls `metrics.py`, not `geometry.py`, but `tests/test_geometry.py` still tests `geometry.py` directly. Decide: delete the old path and update tests, or explicitly document it as a standalone math module. (`src/geometry.py`, `src/stimuli.py`, `tests/test_geometry.py`)
 
-- [ ] **`cross_generalization` function is unused and has a shape bug** — Defined in `src/specificity.py:128-138` but never called from `run_specificity`. Also has a broken indexing guard (`proj.ndim==3` check using `dir_a.shape[0]` which is the hidden dim, not layers). Remove or fix and wire up. (`src/specificity.py:128-138`)
+- [x] **`cross_generalization` function is unused and has a shape bug** — Defined in `src/specificity.py:128-138` but never called from `run_specificity`. Also has a broken indexing guard (`proj.ndim==3` check using `dir_a.shape[0]` which is the hidden dim, not layers). Remove or fix and wire up. (`src/specificity.py:128-138`)
 
 - [x] **Duplicate `from __future__ import annotations`** — Lines 1 and 3 of `src/capture.py` both import it. Delete one. (`src/capture.py:1-3`)
 
