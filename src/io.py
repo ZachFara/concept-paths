@@ -61,7 +61,7 @@ def git_commit_hash() -> Optional[str]:
 
 def package_versions() -> Dict[str, str]:
     pkgs = {}
-    for name in ["torch", "transformers", "nnsight", "numpy", "scipy", "sklearn", "matplotlib"]:
+    for name in ["torch", "transformers", "numpy", "scipy", "sklearn", "matplotlib"]:
         try:
             mod = __import__(name if name != "sklearn" else "sklearn")
             pkgs[name] = getattr(mod, "__version__", "unknown")

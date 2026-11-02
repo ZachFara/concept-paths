@@ -10,7 +10,7 @@
 
 ## Unfinished / Visible Loose Ends
 
-- [ ] **`nnsight` dependency is declared but never used** — `pyproject.toml` lists `nnsight>=0.5.0` and a commit message says "About to change everything to nnsight," but all adapters use raw PyTorch hooks. Either complete the nnsight migration or remove the dependency and the dangling commit context. (`pyproject.toml`, `src/adapters/`)
+- [x] **`nnsight` dependency is declared but never used** — `pyproject.toml` lists `nnsight>=0.5.0` and a commit message says "About to change everything to nnsight," but all adapters use raw PyTorch hooks. Either complete the nnsight migration or remove the dependency and the dangling commit context. (`pyproject.toml`, `src/adapters/`)
 
 - [ ] **`geometry.py` and `stimuli.py` are partially orphaned** — These form an older pipeline path superseded by `metrics.py` + `data.py`. `geometry_runner.py` calls `metrics.py`, not `geometry.py`, but `tests/test_geometry.py` still tests `geometry.py` directly. Decide: delete the old path and update tests, or explicitly document it as a standalone math module. (`src/geometry.py`, `src/stimuli.py`, `tests/test_geometry.py`)
 
@@ -22,6 +22,6 @@
 
 - [ ] **README shows no results** — `README.md` only lists commands. Add a short results section with the key finding (k90 expansion, permutation null plot) so someone landing on the repo understands what it found, not just how to run it.
 
-- [ ] **`activations.py` role is unclear** — An older capture path that duplicates some logic from `capture.py`. Either remove it or document why it exists alongside `capture.py`. (`src/activations.py`)
+- [x] **`activations.py` role is unclear** — An older capture path that duplicates some logic from `capture.py`. Either remove it or document why it exists alongside `capture.py`. (`src/activations.py`)
 
 - [ ] **PC1 variance story needs a clearer framing** — ~20% EVR with wide CIs is not a clean result on its own. Either run on a larger model where the signal is stronger, or reframe the PC1 plot as motivation for the k90 expansion finding rather than a standalone claim.
